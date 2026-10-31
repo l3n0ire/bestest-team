@@ -65,6 +65,7 @@ async function demoRuns() {
     for (let i = 1; i <= RUNS; i++) {
         const { data } = await post("demo")
         const id = data.orderId as string
+        await sleep(800) // /api/state is cached for 700ms; the baseline must include the demo's top-up
         const s0 = await state()
         const [b0, s0e] = [user(s0, "pumpkin")!.escrowCents, user(s0, "ghosty")!.escrowCents]
         let leaked = 0

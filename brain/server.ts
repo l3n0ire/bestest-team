@@ -40,6 +40,18 @@ async function snapshot() {
     return { listings: listings.filter(Boolean), orders: revealed, users: sealed, llm: llmStats() }
 }
 
+// Every open page polls /api/state, and one snapshot costs an actor call per user, order and listing.
+// Requests within 700ms share one snapshot, so actor load stays flat however many tabs are open.
+let cached: { at: number; data: ReturnType<typeof snapshot> } | undefined
+function cachedSnapshot() {
+    if (!cached || Date.now() - cached.at > 700) {
+        const data = snapshot()
+        cached = { at: Date.now(), data }
+        data.catch(() => { if (cached?.data === data) cached = undefined })
+    }
+    return cached.data
+}
+
 type Body = Record<string, unknown>
 
 const routes: Record<string, (b: Body) => Promise<Response>> = {
@@ -100,7 +112,13 @@ export function serve(port = Number(process.env.PORT ?? 3000)) {
         async fetch(req) {
             const { pathname } = new URL(req.url)
             if (pathname === "/") return new Response(Bun.file(new URL("../web/index.html", import.meta.url)))
-            if (pathname === "/api/state") return Response.json(await snapshot())
+            if (pathname === "/api/state") {
+                try {
+                    return Response.json(await cachedSnapshot())
+                } catch (err) {
+                    return Response.json({ error: (err as Error).message }, { status: 503 })
+                }
+            }
             const route = req.method === "POST" && routes[pathname.replace("/api/", "")]
             if (!route) return new Response("not found", { status: 404 })
             try {
