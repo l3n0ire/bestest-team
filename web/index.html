@@ -209,17 +209,24 @@ $("sellBtn").onclick = async () => {
   } catch (e) { $("sellErr").textContent = e.message }
 }
 
+// Jump straight to the haggle: select the new order and bring the stage into view.
+function focusOrder(orderId) {
+  selected = orderId; pinned = true
+  refresh()
+  $("stage").scrollIntoView({ behavior: "smooth", block: "center" })
+}
+
 // Stage buttons stay visible once orders exist (the empty-state demo button disappears).
 async function startStage(path, btn) {
   btn.disabled = true
-  try { const { orderId } = await post(path, {}); selected = orderId; pinned = true; refresh() } finally { btn.disabled = false }
+  try { const { orderId } = await post(path, {}); focusOrder(orderId) } finally { btn.disabled = false }
 }
 $("demoTop").onclick = () => startStage("demo", $("demoTop"))
 $("attackBtn").onclick = () => startStage("attack", $("attackBtn"))
 
 $("demoBtn").onclick = async () => {
   $("demoBtn").disabled = true
-  try { const { orderId } = await post("demo", {}); selected = orderId; pinned = true; refresh() } finally { $("demoBtn").disabled = false }
+  try { const { orderId } = await post("demo", {}); focusOrder(orderId) } finally { $("demoBtn").disabled = false }
 }
 
 async function sendAgent(listingId) {
@@ -231,8 +238,8 @@ async function sendAgent(listingId) {
       deadlineSec: $("dl-" + listingId).value,
       prefs: $("pref-" + listingId).value,
     })
-    selected = orderId; pinned = true; openCard = null
-    refresh()
+    openCard = null
+    focusOrder(orderId)
   } catch (e) { err.textContent = e.message }
 }
 
@@ -248,7 +255,9 @@ function renderListings() {
   // Re-rendering replaces the buttons, which swallows clicks in progress, so only redraw on change.
   // Every word must match the title, condition or seller name.
   const words = $("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const shown = state.listings.filter((l) => { const hay = `${l.title} ${l.condition} ${seller(l.sellerId)}`.toLowerCase(); return words.every((w) => hay.includes(w)) })
+  // Stage demos create a fresh listing each run; they live on the stage, not in the catalog.
+  const shown = state.listings.filter((l) => !/^iphone-(demo|attack)-/.test(l.id)).filter((l) => { const hay = `${l.title} ${l.condition} ${seller(l.sellerId)}`.toLowerCase(); return words.every((w) => hay.includes(w)) })
+    .sort((a, b) => (a.status === "sold") - (b.status === "sold")) // what you can still buy comes first
   const key = JSON.stringify([state.listings, me?.id, openCard, state.users.map((u) => u.name), words])
   if (key === renderListings.key) return
   if (openCard && document.activeElement?.closest?.(".card.open")) return
@@ -284,7 +293,7 @@ function renderTabs() {
   const key = JSON.stringify([selected, orders.map((o) => [o.id, o.status, o.finalCents])])
   if (key === renderTabs.key) return
   renderTabs.key = key
-  $("tabs").innerHTML = orders.slice(0, 12).map((o) => `<button class="ghost ${o.id === selected ? "active" : ""}" data-order="${o.id}">
+  $("tabs").innerHTML = orders.slice(0, 6).map((o) => `<button class="ghost ${o.id === selected ? "active" : ""}" data-order="${o.id}">
     ${avatar(o.sellerId)} ↔ ${avatar(o.buyerId)} ${esc(listing(o.listingId)?.emoji ?? "")} ${o.status === "open" ? "· live" : o.status === "deal" ? "· " + usd(o.finalCents) : "· " + o.status}</button>`).join("")
   for (const b of document.querySelectorAll("[data-order]")) b.onclick = () => { selected = b.dataset.order; pinned = true; render() }
 }
