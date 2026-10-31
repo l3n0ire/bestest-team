@@ -12,10 +12,10 @@ export async function createUser(id: string, name: string) {
     await agentFor(id)
 }
 
-export async function createListing(data: Omit<ListingData, "status">, floorCents: number) {
+export async function createListing(data: Omit<ListingData, "status">, floorCents: number, strategy?: string) {
     const existing = await actors.Listing.get(data.id).read()
     await actors.Listing.get(data.id).create({ ...data, status: "open" })
-    if (!existing) await actors.User.get(data.sellerId).setMandate(data.id, { side: "sell", limitCents: floorCents })
+    if (!existing) await actors.User.get(data.sellerId).setMandate(data.id, { side: "sell", limitCents: floorCents, ...(strategy ? { prefs: strategy } : {}) })
     await market.addListing(data.id)
 }
 

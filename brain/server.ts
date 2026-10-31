@@ -35,7 +35,7 @@ async function snapshot() {
     const revealed = await Promise.all(orders.filter(Boolean).map(async (o) => {
         if (o!.status !== "deal") return o
         const [floor, ceiling] = await Promise.all([actors.User.get(o!.sellerId).mandate(o!.listingId), actors.User.get(o!.buyerId).mandate(o!.listingId)])
-        return { ...o!, reveal: { floorCents: floor?.limitCents, ceilingCents: ceiling?.limitCents } }
+        return { ...o!, reveal: { floorCents: floor?.limitCents, ceilingCents: ceiling?.limitCents, sellerStrategy: floor?.prefs, buyerStrategy: ceiling?.prefs } }
     }))
     return { listings: listings.filter(Boolean), orders: revealed, users: sealed, llm: llmStats() }
 }
@@ -71,7 +71,9 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
         if (floor > ask) return bad("floor can't be above the ask")
         if (!(await known(sellerId))) return bad("unknown user: join the market first")
         const id = `${slug(title)}-${Date.now().toString(36)}`
-        await createListing({ id, sellerId, title, condition: String(b.condition ?? "Used").slice(0, 60), askCents: ask, emoji: String(b.emoji || "📦").slice(0, 4) }, floor)
+        // The owner's own prompt for their agent. Private like the floor; it can never override the limit check.
+        const strategy = String(b.strategy ?? "").trim().slice(0, 300)
+        await createListing({ id, sellerId, title, condition: String(b.condition ?? "Used").slice(0, 60), askCents: ask, emoji: String(b.emoji || "📦").slice(0, 4) }, floor, strategy || undefined)
         return Response.json({ id })
     },
     async buy(b) {
@@ -94,7 +96,7 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
             side: "buy",
             limitCents: ceiling,
             ...(deadlineSec > 0 ? { deadlineAt: Date.now() + deadlineSec * 1000 } : {}),
-            ...(b.prefs ? { prefs: String(b.prefs).slice(0, 120) } : {}),
+            ...(b.prefs ? { prefs: String(b.prefs).slice(0, 300) } : {}),
         })
         return Response.json({ orderId: await openOrder(buyerId, listingId) })
     },

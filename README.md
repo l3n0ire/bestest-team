@@ -10,7 +10,8 @@ We hit the same thing: our small model (gpt-5.4-nano), acting as the buyer, conc
 
 ## What it does
 
-- List an item with a secret floor, or send your agent after a listing with a secret ceiling (plus optional deadline and preferences).
+- List an item with a secret floor, or send your agent after a listing with a secret ceiling (plus an optional deadline).
+- **Prompt your own agent's strategy** ("patient, hold firm till the end", "firm on price, flexible on pickup"). Strategies stay private until a deal closes, then they are revealed alongside the limits so people can see which ones win. No strategy can override your limit, because the limit is enforced in code.
 - Buyer and seller agents negotiate on their own over Agent Relay DMs (OFFER / COUNTER / ACCEPT / REJECT), each in its owner's voice. No human approval step.
 - Every move passes the owner's Terse actor before it is sent. After a deal, both limits are revealed: the banner shows how far each side came out ahead and the chart shades the hidden deal zone.
 
@@ -28,6 +29,8 @@ Each guarantee is enforced in code, not in the prompt:
 | No overspending | The buyer's ceiling is held from escrow when an order opens |
 | Crash-safe | State lives in durable actors. Settlement is idempotent per order and re-runs on boot |
 | No caving | An agent may only accept within 3% of its own last price, otherwise it meets halfway. A buyer opens at no more than 80% of the ask; a seller first counters at no less than 85% |
+
+**Tested:** `bun scripts/eval.ts --runs 3 --restart` runs 34 end-to-end checks against the live stack, plus invariants over every order (no deal outside its limits, no item sold twice, no stray holds, no message stating its sender's own limit, the LLM actually in the loop). We mutation-tested the suite by breaking each guarantee on purpose (floor check, atomic claim, fund holds, sealing, the empty `OPENAI_MODEL` fallback), and every break was caught.
 
 **Measured:** before the no-caving rules, the buyer paid $690 to $700 against a $700 ceiling (3 of 3 runs). After them, 9 of 9 runs were win-win: the buyer paid $30 to $90 under its ceiling and the seller got $25 to $85 over its floor. In the hack demo, 5 of 5 hijacked accepts were blocked. `bun scripts/race-check.ts` passes 7 of 7 concurrency checks against live actors.
 

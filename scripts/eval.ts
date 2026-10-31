@@ -11,7 +11,7 @@ const check = (name: string, ok: boolean, detail: string) => {
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}: ${detail}`)
 }
 
-type Order = { id: string; listingId: string; buyerId: string; sellerId: string; status: string; moves: { from: string; text: string; priceCents?: number }[]; finalCents?: number; escrow: string; closedReason?: string; reveal?: { floorCents?: number; ceilingCents?: number } }
+type Order = { id: string; listingId: string; buyerId: string; sellerId: string; status: string; moves: { from: string; text: string; priceCents?: number }[]; finalCents?: number; escrow: string; closedReason?: string; reveal?: { floorCents?: number; ceilingCents?: number; sellerStrategy?: string; buyerStrategy?: string } }
 type State = { listings: { id: string; status: string; askCents: number }[]; orders: Order[]; users: { id: string; escrowCents: number; heldCents?: number; activity: { orderId?: string; kind: string; text: string }[] }[]; llm?: { configured: boolean; model: string; calls: number; failures: number } }
 
 async function post(path: string, body: unknown = {}) {
@@ -33,6 +33,15 @@ const user = (s: State, id: string) => s.users.find((u) => u.id === id)
 const order = (s: State, id: string) => s.orders.find((o) => o.id === id)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const $ = (cents = 0) => `$${Math.round(cents / 100)}`
+// Cross-actor bookkeeping (order status first, then the buyer's hold) lands within a moment: poll up to 5s before judging.
+async function settledUser(id: string, ok: (u: State["users"][number]) => boolean, ms = 5000) {
+    const t0 = Date.now()
+    for (;;) {
+        const u = user(await state(), id)!
+        if (ok(u) || Date.now() - t0 > ms) return u
+        await sleep(800)
+    }
+}
 
 // Closed means done: a deal also has to finish settling (status flips to "deal" just before settle() runs).
 async function waitClosed(orderId: string, timeoutMs = 150_000): Promise<Order | undefined> {
@@ -47,8 +56,8 @@ async function waitClosed(orderId: string, timeoutMs = 150_000): Promise<Order |
 async function join(name: string) {
     return (await post("join", { name: `${name} ${uniq}` })).data.id as string
 }
-async function list(sellerId: string, title: string, ask: number, floor: number) {
-    return (await post("sell", { userId: sellerId, title: `${title} ${uniq}`, askDollars: ask, floorDollars: floor, condition: "Good" })).data.id as string
+async function list(sellerId: string, title: string, ask: number, floor: number, strategy?: string) {
+    return (await post("sell", { userId: sellerId, title: `${title} ${uniq}`, askDollars: ask, floorDollars: floor, condition: "Good", strategy })).data.id as string
 }
 // Any amount next to the words floor/ceiling/limit in public text is a leak while the order is live.
 const leaks = (text: string) => /(floor|ceiling|limit|max|min)/i.test(text) && /\$\d/.test(text) && !text.includes("🔒")
@@ -101,7 +110,7 @@ async function lowball() {
     const again = await post("buy", { userId: buyer, listingId: target.id, ceilingDollars: 500 })
     check("one try per item", !again.ok && /one try/.test(again.data.error ?? ""), again.data.error ?? "second try was accepted")
     const o = await waitClosed(data.orderId)
-    const u = user(await state(), buyer)!
+    const u = await settledUser(buyer, (x) => !x.heldCents)
     check("no-overlap terminates", o?.status === "walked" && o.moves.length <= 11, `${o?.status} after ${o?.moves.length} moves`)
     check("walk returns hold", (u.heldCents ?? 0) === 0 && u.escrowCents === 200000, `escrow ${$(u.escrowCents)}, held ${$(u.heldCents)}`)
 }
@@ -109,16 +118,19 @@ async function lowball() {
 // 6. Two buyers race for one item: at most one deal, loser untouched, seller paid once
 async function race() {
     const seller = await join("Eval Seller")
-    const item = await list(seller, "Race Gadget", 300, 230)
+    const item = await list(seller, "Race Gadget", 300, 230, "Firm on price, flexible on pickup time.")
     const [a, b] = [await join("Eval Racer A"), await join("Eval Racer B")]
-    const opened = await Promise.all([a, b].map((u) => post("buy", { userId: u, listingId: item, ceilingDollars: 300 })))
+    const opened = await Promise.all([a, b].map((u) => post("buy", { userId: u, listingId: item, ceilingDollars: 300, prefs: "Patient: open low, raise slowly." })))
     const orders = await Promise.all(opened.filter((r) => r.ok).map((r) => waitClosed(r.data.orderId)))
     const s = await state()
     const deals = orders.filter((o) => o?.status === "deal")
     const paid = deals.reduce((n, o) => n + (o!.finalCents ?? 0), 0)
-    const losers = orders.filter((o) => o?.status !== "deal").map((o) => user(s, o!.buyerId)!)
+    const losers = await Promise.all(orders.filter((o) => o?.status !== "deal").map((o) => settledUser(o!.buyerId, (x) => !x.heldCents)))
     // Exactly one: both ceilings sit above the floor, so zero deals would mean claims are broken the other way.
     check("race: one sale", deals.length === 1, `${deals.length} deal(s): ${orders.map((o) => `${o?.status}${o?.closedReason ? ` (${o.closedReason})` : ""}`).join(", ")}`)
+    // Owners prompt their agents; the strategies are private until the deal closes, then revealed with the limits.
+    const rv = deals[0]?.reveal
+    check("strategies carried and revealed", !!rv?.sellerStrategy && !!rv?.buyerStrategy, rv ? `seller "${rv.sellerStrategy}", buyer "${rv.buyerStrategy}"` : "no deal to reveal")
     check("race: loser untouched", losers.every((u) => u.escrowCents === 200000 && !u.heldCents), losers.map((u) => `${$(u.escrowCents)} held ${$(u.heldCents)}`).join(", ") || "no loser")
     check("race: seller paid once", user(s, seller)!.escrowCents - 200000 === paid, `seller +${$(user(s, seller)!.escrowCents - 200000)} vs deals ${$(paid)}`)
 }
@@ -133,7 +145,7 @@ async function overcommit() {
     const r3 = await post("buy", { userId: buyer, listingId: i3, ceilingDollars: 300 })
     check("overcommit refused", r1.ok && r2.ok && !r3.ok && /not enough escrow/.test(r3.data.error ?? ""), r3.data.error ?? "third order was accepted")
     const orders = await Promise.all([r1, r2].map((r) => waitClosed(r.data.orderId)))
-    const u = user(await state(), buyer)!
+    const u = await settledUser(buyer, (x) => !x.heldCents)
     const spent = orders.reduce((n, o) => n + (o?.status === "deal" ? o.finalCents ?? 0 : 0), 0)
     check("holds reconcile", !u.heldCents && u.escrowCents === 200000 - spent, `escrow ${$(u.escrowCents)} = $2000 - ${$(spent)}, held ${$(u.heldCents)}`)
 }
@@ -160,6 +172,7 @@ async function ui() {
 
 // Invariants over every order in the market, not just this run's
 async function invariants() {
+    await sleep(1500) // past the 700ms state cache and any in-flight bookkeeping
     const s = await state()
     const deals = s.orders.filter((o) => o.status === "deal")
     const outside = deals.filter((o) => !o.reveal?.floorCents || !o.reveal?.ceilingCents || o.finalCents! < o.reveal.floorCents || o.finalCents! > o.reveal.ceilingCents)
@@ -192,7 +205,8 @@ async function attack() {
     // Deterministic sealing check: a walked order stays sealed, and "Blocked ACCEPT: $100 is below your floor" would leak.
     const entries = s.users.flatMap((u) => u.activity).filter((a) => a.orderId === data.orderId && a.kind === "blocked")
     check("hack: block details sealed", entries.length >= 1 && entries.every((a) => a.text.includes("🔒")), `${entries.filter((a) => !a.text.includes("🔒")).length} of ${entries.length} blocked entries readable by the public`)
-    check("hack: hold returned", !user(s, "hacker")!.heldCents, `hacker held ${$(user(s, "hacker")!.heldCents)}`)
+    const hacker = await settledUser("hacker", (x) => !x.heldCents)
+    check("hack: hold returned", !hacker.heldCents, `hacker held ${$(hacker.heldCents)}`)
 }
 
 // Stale identity (a browser that kept a user id across a reset): must be refused, not crash the brain

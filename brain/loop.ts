@@ -85,16 +85,26 @@ async function turn(orderId: string) {
     const result = await actors.Order.get(orderId).applyMove(move)
     if (!result.applied) return console.warn(`order ${orderId}: ${describe(move)} not applied (${result.reason})`)
 
-    const agent = await agentFor(self)
-    const sent = await agent.sendMessage({ to: `@${them.agentName}`, text: encodeMove(move) })
-    if (!order.dmId && sent.conversationId) await actors.Order.get(orderId).setDm(sent.conversationId)
-    console.log(`→ ${self}: ${describe(move)}  "${move.text}"`)
-
+    // Book-keep before notifying: if the send fails, the money and the listing are already right.
     if (move.type === "ACCEPT") {
         await settle(orderId)
         await Promise.all(others.map((id) => closeOrder(id, "sold to another buyer")))
     }
     if (move.type === "REJECT") await release(order)
+
+    const agent = await agentFor(self)
+    const sent = await agent.sendMessage({ to: `@${them.agentName}`, text: encodeMove(move) })
+    if (!order.dmId && sent.conversationId) await actors.Order.get(orderId).setDm(sent.conversationId)
+    console.log(`→ ${self}: ${describe(move)}  "${move.text}"`)
+}
+
+// Boot-time repair for whatever a crash interrupted: finish a deal's settle, or return a closed order's hold.
+// Both steps are idempotent, so running this for every order is safe.
+export async function reconcile(orderId: string) {
+    const order = await actors.Order.get(orderId).read()
+    if (!order || order.status === "open") return
+    if (order.status === "deal") return settle(orderId)
+    await release(order)
 }
 
 // The order is over without a sale: free the item for others (unless sold) and give the buyer's reserved money back.

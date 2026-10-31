@@ -122,6 +122,7 @@
       <summary style="cursor:pointer; margin-bottom: 8px">➕ Sell something</summary>
       <div class="row"><input id="sEmoji" placeholder="📦" style="width:60px"><input id="sTitle" placeholder="What is it?"></div>
       <div class="row"><input id="sCond" placeholder="Condition"></div>
+      <div class="row"><input id="sStrategy" placeholder="Your agent's strategy (e.g. firm on price, flexible on pickup)" maxlength="300"></div>
       <div class="row"><input id="sAsk" type="number" placeholder="Ask $"><input id="sFloor" type="number" placeholder="Secret floor $"></div>
       <button id="sellBtn">List it</button>
       <div class="err" id="sellErr"></div>
@@ -196,8 +197,8 @@ $("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click()
 
 $("sellBtn").onclick = async () => {
   try {
-    await post("sell", { userId: me.id, emoji: $("sEmoji").value, title: $("sTitle").value, condition: $("sCond").value, askDollars: $("sAsk").value, floorDollars: $("sFloor").value })
-    for (const f of ["sEmoji", "sTitle", "sCond", "sAsk", "sFloor"]) $(f).value = ""
+    await post("sell", { userId: me.id, emoji: $("sEmoji").value, title: $("sTitle").value, condition: $("sCond").value, askDollars: $("sAsk").value, floorDollars: $("sFloor").value, strategy: $("sStrategy").value })
+    for (const f of ["sEmoji", "sTitle", "sCond", "sAsk", "sFloor", "sStrategy"]) $(f).value = ""
     $("sellErr").textContent = ""
     $("sellBox").open = false
     refresh()
@@ -258,7 +259,8 @@ function renderListings() {
       </div>
       <div class="buyform">
         <div class="row"><input id="ceil-${l.id}" type="number" placeholder="Secret ceiling $"><input id="dl-${l.id}" type="number" placeholder="Deadline (sec)"></div>
-        <div class="row"><input id="pref-${l.id}" placeholder="Preferences, e.g. pickup only"></div>
+        <div class="row"><input id="pref-${l.id}" placeholder="Your agent's strategy (e.g. patient, hold firm till the end)" maxlength="300"></div>
+        <div class="note" style="margin:0 0 8px">Prompt your agent however you like. Your ceiling is enforced in code, so no strategy can make it overpay.</div>
         <button data-go="${l.id}">Go haggle 🎃</button>
         <div class="err" id="err-${l.id}"></div>
       </div>
@@ -318,7 +320,10 @@ function renderStage() {
     b.innerHTML = `SOLD for ${usd(o.finalCents)} 💸<div class="win">` +
       `${avatar(o.buyerId)} ${esc(name(o.buyerId))} paid <b>${usd(r.ceilingCents - o.finalCents)} under</b> their secret max · ` +
       `${avatar(o.sellerId)} ${esc(name(o.sellerId))} got <b>${usd(o.finalCents - r.floorCents)} over</b> their secret floor` +
-      `<br>Both won. Neither agent ever saw the other's number.</div>`
+      `<br>Both won. Neither agent ever saw the other's number.` +
+      (r.buyerStrategy || r.sellerStrategy
+        ? `<br><i>Strategies: ${avatar(o.buyerId)} "${esc((r.buyerStrategy || "default").slice(0, 60))}" vs ${avatar(o.sellerId)} "${esc((r.sellerStrategy || "default").slice(0, 60))}"</i>`
+        : "") + `</div>`
   // Trust HUD: the round cap and the limit guard are enforced in code; show both live.
   const blocked = state.users.flatMap((u) => u.activity ?? []).filter((e) => e.orderId === o.id && e.kind === "blocked").length
   $("hud").innerHTML = `<span class="pill">Round ${Math.min(o.moves.length, MAX_MOVES)} / ${MAX_MOVES} · cap enforced in code</span>` +

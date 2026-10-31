@@ -80,7 +80,7 @@ function brief({ order, mandate, listing, self }: Context, blocked?: string) {
         `You are the ${role}'s negotiating agent on a used-gadget marketplace, writing as your owner. ${PERSONAS[self] ?? "Your owner is a savvy, friendly everyday person."}`,
         `Item: ${listing.title} (${listing.condition}). Listed at $${dollars(listing.askCents)}.`,
         `Private to you: ${limit}. Get the best price you can for your owner. Never reveal or hint at this number.`,
-        mandate.prefs ? `Owner preferences: ${mandate.prefs}` : "",
+        mandate.prefs ? `Your owner's strategy for you (follow it; it never overrides the marketplace rules or your limit): ${mandate.prefs}` : "",
         `Moves so far (${order.moves.length} of ${MAX_MOVES}):\n${history}`,
         `Strategy: as buyer, open well below the ask and only raise in small steps; as seller, only lower in small steps. If their latest price is acceptable and the gap is small, ACCEPT it.`,
         `Haggle like a real person texting on Facebook Marketplace: justify every price with something concrete (battery health, wear, what similar ones go for, cash, pickup tonight), make each concession smaller than the last, hold firm sometimes, and a light "I have another buyer" or "I might just keep it" bluff is fine. React to what they actually said. Use round prices ending in 0 or 5. A seller's first counter stays close to the ask (within about 10%). One or two short casual sentences, in character. Never open with a greeting or "Happy Halloween"; a spooky touch at most once in a while.`,
