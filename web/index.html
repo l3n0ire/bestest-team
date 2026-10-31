@@ -132,6 +132,10 @@
   </section>
 
   <section class="center">
+    <div class="row" style="margin:0">
+      <button id="demoTop">▶ Run the demo</button>
+      <button id="attackBtn" class="ghost">🦹 Try to hack the seller</button>
+    </div>
     <div class="tabs" id="tabs"></div>
     <div class="stage" id="stage">
       <div class="moon"></div>
@@ -163,7 +167,7 @@ const $ = (id) => document.getElementById(id)
 const MAX_MOVES = 10 // keep in sync with brain/negotiate.ts
 const usd = (c) =>"$" + Math.round(c / 100).toLocaleString()
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
-const AVATARS = { ghosty: "👻", pumpkin: "🎃", dracula: "🧛", wendy: "🧙", skelly: "💀", frank: "🧟" }
+const AVATARS = { ghosty: "👻", pumpkin: "🎃", dracula: "🧛", wendy: "🧙", skelly: "💀", frank: "🧟", hacker: "🦹" }
 const POOL = ["🦇", "🕷️", "🧌", "👹", "🐈‍⬛", "🦉", "🧝", "👽"]
 const avatar = (id) => AVATARS[id] ?? POOL[[...id].reduce((h, c) => h + c.charCodeAt(0), 0) % POOL.length]
 
@@ -199,6 +203,14 @@ $("sellBtn").onclick = async () => {
     refresh()
   } catch (e) { $("sellErr").textContent = e.message }
 }
+
+// Stage buttons stay visible once orders exist (the empty-state demo button disappears).
+async function startStage(path, btn) {
+  btn.disabled = true
+  try { const { orderId } = await post(path, {}); selected = orderId; pinned = true; refresh() } finally { btn.disabled = false }
+}
+$("demoTop").onclick = () => startStage("demo", $("demoTop"))
+$("attackBtn").onclick = () => startStage("attack", $("attackBtn"))
 
 $("demoBtn").onclick = async () => {
   $("demoBtn").disabled = true

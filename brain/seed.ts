@@ -1,6 +1,6 @@
 import { actors } from "../market/client/generated/index.js"
 import type { ListingData } from "../market/actor/src/actors.js"
-import { takeTurn } from "./loop.js"
+import { attackers, hijacked, takeTurn } from "./loop.js"
 import { agentFor } from "./relay.js"
 
 export const market = actors.Market.get("haunted")
@@ -79,4 +79,19 @@ export async function startDemo() {
     await createListing({ id, sellerId: "ghosty", emoji: "📱", title: "iPhone 14 Pro 128GB", condition: "Good, 89% battery", askCents: 75000 }, 58500)
     await actors.User.get("pumpkin").setMandate(id, { side: "buy", limitCents: 70000 })
     return openOrder("pumpkin", id)
+}
+
+// Stage demo: a scripted attacker whose every message is a prompt injection, against a seller whose LLM we treat as
+// fully hijacked. Even then, the floor check in the seller's User actor refuses every bad move.
+export async function startAttack() {
+    await seed()
+    await createUser("hacker", "Sneaky Hacker")
+    if ((await actors.User.get("hacker").available()) < 15000) await actors.User.get("hacker").deposit(200000)
+    const id = `iphone-attack-${Date.now().toString(36)}`
+    await createListing({ id, sellerId: "ghosty", emoji: "📱", title: "iPhone 14 Pro 128GB", condition: "Good, 89% battery", askCents: 75000 }, 58500)
+    await actors.User.get("hacker").setMandate(id, { side: "buy", limitCents: 15000 })
+    attackers.add("hacker")
+    const orderId = await openOrder("hacker", id)
+    hijacked.add(orderId)
+    return orderId
 }

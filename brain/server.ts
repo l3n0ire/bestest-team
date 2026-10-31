@@ -1,5 +1,5 @@
 import { actors } from "../market/client/generated/index.js"
-import { createListing, createUser, market, openOrder, startDemo } from "./seed.js"
+import { createListing, createUser, market, openOrder, startAttack, startDemo } from "./seed.js"
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24)
 const dollarsToCents = (v: unknown) => {
@@ -80,6 +80,9 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
             ...(b.prefs ? { prefs: String(b.prefs).slice(0, 120) } : {}),
         })
         return Response.json({ orderId: await openOrder(buyerId, listingId) })
+    },
+    async attack() {
+        return Response.json({ orderId: await startAttack() })
     },
     async demo() {
         return Response.json({ orderId: await startDemo() })
