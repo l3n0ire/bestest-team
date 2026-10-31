@@ -4,9 +4,20 @@ import { market, seed, startDemo } from "./seed.js"
 import { serve } from "./server.js"
 
 listen()
-await seed()
-const { userIds, orderIds } = await market.read()
-await Promise.all(userIds.map(agentFor))
+// Terse may still be starting or restarting: retry boot instead of dying on the first unreachable actor.
+let userIds: string[] = [], orderIds: string[] = []
+for (let attempt = 1; ; attempt++) {
+    try {
+        await seed()
+        ;({ userIds, orderIds } = await market.read())
+        await Promise.all(userIds.map(agentFor))
+        break
+    } catch (err) {
+        if (attempt >= 30) throw err
+        console.warn(`boot attempt ${attempt} failed (${(err as Error).message}); retrying in 2s`)
+        await Bun.sleep(2000)
+    }
+}
 console.log(`brain up: ${userIds.length} agents, ${orderIds.length} orders`)
 for (const id of orderIds) void takeTurn(id)
 // Finishes any settle a crash interrupted; a no-op for orders that aren't unreleased deals.

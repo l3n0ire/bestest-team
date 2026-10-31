@@ -18,7 +18,17 @@ async function post(path: string, body: unknown = {}) {
     const res = await fetch(`${BASE}/api/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
     return { ok: res.ok, data: (await res.json()) as Record<string, any> }
 }
-const state = async (): Promise<State> => (await fetch(`${BASE}/api/state`)).json()
+// Retries transient failures (a 500 page while the brain or actors restart) so one blip can't crash the whole run.
+async function state(): Promise<State> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return (await (await fetch(`${BASE}/api/state`)).json()) as State
+        } catch (err) {
+            if (attempt >= 5) throw err
+            await new Promise((r) => setTimeout(r, 1000))
+        }
+    }
+}
 const user = (s: State, id: string) => s.users.find((u) => u.id === id)
 const order = (s: State, id: string) => s.orders.find((o) => o.id === id)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
