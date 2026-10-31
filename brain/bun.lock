@@ -1,0 +1,25 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "brain",
+      "dependencies": {
+        "@agent-relay/sdk": "^15.0.1",
+        "openai": "^7.47.0",
+        "zod": "^4.6.7",
+      },
+    },
+  },
+  "packages": {
+    "@agent-relay/sdk": ["@agent-relay/sdk@15.0.1", "", { "dependencies": { "@relaycast/sdk": "^8.0.7", "@relaycast/types": "^8.0.7", "zod": "^4.4.3" } }, "sha512-+I6LMGJnYO3e/yA+8yWOiWeJ43e9qJ6g6/5Hpspecj+qKBY3tIsQB5h47AX1AwTR9GDRXkT8Qp4f/RTj3K+vkg=="],
+
+    "@relaycast/sdk": ["@relaycast/sdk@8.16.0", "", { "dependencies": { "@relaycast/types": "8.16.0", "zod": "^4.3.6" } }, "sha512-c3jXSDR2WAJCaiNsd92N/3sADLDHkFraw4Ogey2sKLtq48D/p/TQLnD9BE5r9Rk5zoZ0Y8Ls4mzceCeVGekFBQ=="],
+
+    "@relaycast/types": ["@relaycast/types@8.16.0", "", { "dependencies": { "zod": "^4.3.6" } }, "sha512-yLho3/MMMCu4+GEt0L67XU/n5HUatq9mDEsNlOZUPcAjHTCbbTNjN7MRfb6y91wKeLvzha0ggHJ3DzxR4mH4GQ=="],
+
+    "openai": ["openai@7.47.0", "", { "peerDependencies": { "@aws-sdk/credential-provider-node": ">=3.972.0 <4", "@smithy/hash-node": ">=4.3.0 <5", "@smithy/signature-v4": ">=5.4.0 <6", "google-auth-library": ">=9.15.1 <12", "undici": ">=5 <9", "ws": "^8.21.0", "zod": "^3.25 || ^4.0" }, "optionalPeers": ["@aws-sdk/credential-provider-node", "@smithy/hash-node", "@smithy/signature-v4", "google-auth-library", "undici", "ws", "zod"] }, "sha512-BYa2RYgocAv9WjPUJmNu8fICuA1fFhkTBEpiR3sC5L1K6v8Hnhc8pcnQEhu8l/+W1XKA+JUaBa7HpT+AK1s77w=="],
+
+    "zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
+  }
+}

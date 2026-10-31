@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haunted Haggle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #120e1c; --panel: #1c1630; --panel-2: #251d3f; --line: #3a2f5c;
+    --text: #f2ecff; --muted: #a99cc9; --orange: #ff8a2a; --purple: #a479ff; --green: #6ff0a0; --red: #ff6b7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: Fredoka, system-ui, sans-serif; color: var(--text);
+    background: radial-gradient(1200px 600px at 50% -10%, #2b1f4d 0%, var(--bg) 60%) fixed; min-height: 100vh;
+  }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  header h1 span { color: var(--orange); }
+  header .tag { color: var(--muted); font-size: 14px; }
+  header .me { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .pill { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+  main { display: grid; grid-template-columns: 300px 1fr 320px; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  input, button, select { font: inherit; }
+  input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  button { background: var(--orange); color: #1a0f00; border: 0; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .err { color: var(--red); font-size: 13px; min-height: 1em; }
+  .listings { display: flex; flex-direction: column; gap: 8px; max-height: 62vh; overflow: auto; }
+  .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+  .card .top { display: flex; gap: 10px; align-items: center; }
+  .card .emoji { font-size: 26px; }
+  .card .title { font-weight: 600; font-size: 15px; }
+  .card .sub { color: var(--muted); font-size: 12px; }
+  .card .price { margin-left: auto; font-weight: 700; color: var(--orange); }
+  .status { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--line); }
+  .status.negotiating { background: #4a2f00; color: var(--orange); }
+  .status.sold { background: #0f3a24; color: var(--green); }
+  .buyform { margin-top: 8px; display: none; }
+  .card.open .buyform { display: block; }
+  .center { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; }
+  .tabs button { white-space: nowrap; font-size: 13px; padding: 6px 10px; }
+  .tabs button.active { background: var(--purple); color: #120a26; }
+  .stage {
+    position: relative; height: 340px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line);
+    background: linear-gradient(#1a1233 0%, #2a1d4f 65%, #3b2a1e 65%, #2b1f15 100%);
+  }
+  .moon { position: absolute; top: 22px; right: 40px; width: 54px; height: 54px; border-radius: 50%; background: #ffe7a8; box-shadow: 0 0 40px #ffe7a866; }
+  .stall { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); width: 170px; text-align: center; }
+  .stall .awning { height: 26px; background: repeating-linear-gradient(90deg, var(--orange) 0 20px, #2b1f15 20px 40px); border-radius: 8px 8px 0 0; }
+  .stall .counter { background: #5a3b22; border-radius: 0 0 8px 8px; padding: 10px 0; font-size: 40px; }
+  .char { position: absolute; bottom: 14%; width: 130px; text-align: center; transition: transform .3s; }
+  .char.seller { left: 8%; } .char.buyer { right: 8%; }
+  .char .body { font-size: 84px; line-height: 1; display: inline-block; animation: bob 2.4s ease-in-out infinite; }
+  .char.buyer .body { animation-delay: -1.2s; }
+  .char.talking .body { animation: talk .35s ease-in-out 4; }
+  .char .name { margin-top: 4px; font-weight: 600; font-size: 14px; }
+  .char .role { font-size: 11px; color: var(--muted); }
+  @keyframes bob { 50% { transform: translateY(-8px); } }
+  @keyframes talk { 50% { transform: translateY(-4px) scale(1.08); } }
+  .bubble {
+    position: absolute; bottom: calc(14% + 140px); width: min(300px, 40%); background: #fff; color: #1c1630;
+    border-radius: 16px; padding: 10px 12px; font-size: 14px; box-shadow: 0 6px 20px #0006; opacity: 0; transition: opacity .3s;
+  }
+  .bubble.show { opacity: 1; }
+  .bubble.seller { left: 4%; } .bubble.buyer { right: 4%; }
+  .bubble::after { content: ""; position: absolute; bottom: -10px; border: 10px solid transparent; border-top-color: #fff; border-bottom: 0; }
+  .bubble.seller::after { left: 50px; } .bubble.buyer::after { right: 50px; }
+  .bubble .kind { font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--purple); }
+  .bubble .amt { font-weight: 700; color: #c55a00; }
+  .thinking { position: absolute; bottom: calc(14% + 104px); font-size: 22px; letter-spacing: 2px; color: var(--muted); }
+  .thinking.seller { left: calc(8% + 50px); } .thinking.buyer { right: calc(8% + 50px); }
+  .thinking span { animation: blink 1.2s infinite; } .thinking span:nth-child(2) { animation-delay: .2s; } .thinking span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .banner { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); padding: 10px 22px; border-radius: 14px; font-size: 22px; font-weight: 700; display: none; }
+  .banner.deal { display: block; background: var(--green); color: #062612; animation: pop .5s; }
+  .banner.walked, .banner.expired { display: block; background: var(--red); color: #2a0006; }
+  @keyframes pop { from { transform: translateX(-50%) scale(.6); } }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
+  .ticker { display: grid; grid-template-columns: 1fr 220px; gap: 16px; }
+  @media (max-width: 700px) { .ticker { grid-template-columns: 1fr; } }
+  .moves { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip { padding: 4px 10px; border-radius: 999px; font-size: 13px; border: 1px solid var(--line); background: var(--panel-2); }
+  .chip.seller { border-color: var(--purple); } .chip.buyer { border-color: var(--orange); }
+  .chip.ACCEPT { background: var(--green); color: #062612; border-color: var(--green); }
+  .chip.REJECT { background: var(--red); color: #2a0006; }
+  svg text { fill: var(--muted); font-size: 10px; font-family: Fredoka; }
+  .logs { display: flex; flex-direction: column; gap: 14px; }
+  .log { max-height: 30vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+  .entry { font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--line); }
+  .entry.blocked { border-left-color: var(--red); } .entry.deal { border-left-color: var(--green); } .entry.decision { border-left-color: var(--purple); }
+  .entry time { color: var(--muted); font-size: 11px; margin-right: 6px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Haunted <span>Haggle</span> 🎃</h1>
+  <div class="tag">Your AI agent haggles for used gadgets. You set the limit. Code enforces it.</div>
+  <div class="me" id="me"></div>
+</header>
+<main>
+  <section class="panel">
+    <div id="join">
+      <h2>Join the market</h2>
+      <div class="row"><input id="name" placeholder="Your name" maxlength="24"><button id="joinBtn">Enter</button></div>
+      <div class="err" id="joinErr"></div>
+    </div>
+    <details id="sellBox" style="display:none; margin-bottom: 12px">
+      <summary style="cursor:pointer; margin-bottom: 8px">➕ Sell something</summary>
+      <div class="row"><input id="sEmoji" placeholder="📦" style="width:60px"><input id="sTitle" placeholder="What is it?"></div>
+      <div class="row"><input id="sCond" placeholder="Condition"></div>
+      <div class="row"><input id="sAsk" type="number" placeholder="Ask $"><input id="sFloor" type="number" placeholder="Secret floor $"></div>
+      <button id="sellBtn">List it</button>
+      <div class="err" id="sellErr"></div>
+    </details>
+    <h2>Listings</h2>
+    <div class="listings" id="listings"></div>
+    <div class="note">Payments are simulated: each person starts with a fake $2,000 escrow balance.</div>
+  </section>
+
+  <section class="center">
+    <div class="tabs" id="tabs"></div>
+    <div class="stage" id="stage">
+      <div class="moon"></div>
+      <div class="empty" id="empty">Pick a listing and send your agent, or <button id="demoBtn" style="margin-left:6px">run the demo</button></div>
+      <div class="stall" id="stall" style="display:none"><div class="awning"></div><div class="counter" id="stallItem"></div></div>
+      <div class="char seller" id="cSeller" style="display:none"><div class="body"></div><div class="name"></div><div class="role">seller's agent</div></div>
+      <div class="char buyer" id="cBuyer" style="display:none"><div class="body"></div><div class="name"></div><div class="role">buyer's agent</div></div>
+      <div class="bubble seller" id="bSeller"></div>
+      <div class="bubble buyer" id="bBuyer"></div>
+      <div class="thinking" id="thinking" style="display:none"><span>•</span><span>•</span><span>•</span></div>
+      <div class="banner" id="banner"></div>
+    </div>
+    <div class="panel ticker">
+      <div><h2>Offer ticker</h2><div class="moves" id="moves"></div></div>
+      <svg id="chart" viewBox="0 0 220 110" width="100%"></svg>
+    </div>
+  </section>
+
+  <section class="panel logs">
+    <div><h2 id="sellerLogTitle">Seller's agent</h2><div class="log" id="sellerLog"></div></div>
+    <div><h2 id="buyerLogTitle">Buyer's agent</h2><div class="log" id="buyerLog"></div></div>
+    <div class="note">Agents decide everything themselves, with no approval step. Every move is checked against its owner's secret limit before it is sent over Agent Relay. Blocked moves show up in red.</div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const usd = (c) => "$" + Math.round(c / 100).toLocaleString()
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
+const AVATARS = { ghosty: "👻", pumpkin: "🎃", dracula: "🧛", wendy: "🧙", skelly: "💀", frank: "🧟" }
+const POOL = ["🦇", "🕷️", "🧌", "👹", "🐈‍⬛", "🦉", "🧝", "👽"]
+const avatar = (id) => AVATARS[id] ?? POOL[[...id].reduce((h, c) => h + c.charCodeAt(0), 0) % POOL.length]
+
+let me = null
+try { me = JSON.parse(localStorage.getItem("me")) } catch {}
+let state = { listings: [], orders: [], users: [] }
+let selected = null, pinned = false, openCard = null, lastMoveId = null
+
+async function post(path, body) {
+  const res = await fetch("/api/" + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || "failed")
+  return data
+}
+
+$("joinBtn").onclick = async () => {
+  try {
+    const name = $("name").value.trim()
+    const { id } = await post("join", { name })
+    me = { id, name }
+    try { localStorage.setItem("me", JSON.stringify(me)) } catch {}
+    render()
+  } catch (e) { $("joinErr").textContent = e.message }
+}
+$("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click()
+
+$("sellBtn").onclick = async () => {
+  try {
+    await post("sell", { userId: me.id, emoji: $("sEmoji").value, title: $("sTitle").value, condition: $("sCond").value, askDollars: $("sAsk").value, floorDollars: $("sFloor").value })
+    for (const f of ["sEmoji", "sTitle", "sCond", "sAsk", "sFloor"]) $(f).value = ""
+    $("sellErr").textContent = ""
+    $("sellBox").open = false
+    refresh()
+  } catch (e) { $("sellErr").textContent = e.message }
+}
+
+$("demoBtn").onclick = async () => {
+  $("demoBtn").disabled = true
+  try { const { orderId } = await post("demo", {}); selected = orderId; pinned = true; refresh() } finally { $("demoBtn").disabled = false }
+}
+
+async function sendAgent(listingId) {
+  const err = $("err-" + listingId)
+  try {
+    const { orderId } = await post("buy", {
+      userId: me.id, listingId,
+      ceilingDollars: $("ceil-" + listingId).value,
+      deadlineSec: $("dl-" + listingId).value,
+      prefs: $("pref-" + listingId).value,
+    })
+    selected = orderId; pinned = true; openCard = null
+    refresh()
+  } catch (e) { err.textContent = e.message }
+}
+
+function renderMe() {
+  $("join").style.display = me ? "none" : ""
+  $("sellBox").style.display = me ? "" : "none"
+  const u = me && state.users.find((u) => u.id === me.id)
+  $("me").innerHTML = u ? `<span class="pill">${avatar(u.id)} ${esc(u.name)}</span><span class="pill">Escrow ${usd(u.escrowCents)}</span>` : ""
+}
+
+function renderListings() {
+  const seller = (id) => state.users.find((u) => u.id === id)?.name ?? id
+  // Re-rendering replaces the buttons, which swallows clicks in progress, so only redraw on change.
+  const key = JSON.stringify([state.listings, me?.id, openCard, state.users.map((u) => u.name)])
+  if (key === renderListings.key) return
+  if (openCard && document.activeElement?.closest?.(".card.open")) return
+  renderListings.key = key
+  $("listings").innerHTML = state.listings.map((l) => `
+    <div class="card ${openCard === l.id ? "open" : ""}" data-id="${l.id}">
+      <div class="top">
+        <div class="emoji">${esc(l.emoji)}</div>
+        <div><div class="title">${esc(l.title)}</div><div class="sub">${esc(l.condition)} · ${esc(seller(l.sellerId))}</div></div>
+        <div class="price">${usd(l.askCents)}</div>
+      </div>
+      <div class="row" style="margin: 6px 0 0; align-items:center">
+        <span class="status ${l.status}">${l.status}</span>
+        ${me && l.status !== "sold" && l.sellerId !== me.id ? `<button class="ghost" style="margin-left:auto; font-size:13px; padding:4px 10px" data-toggle="${l.id}">Send my agent</button>` : ""}
+      </div>
+      <div class="buyform">
+        <div class="row"><input id="ceil-${l.id}" type="number" placeholder="Secret ceiling $"><input id="dl-${l.id}" type="number" placeholder="Deadline (sec)"></div>
+        <div class="row"><input id="pref-${l.id}" placeholder="Preferences, e.g. pickup only"></div>
+        <button data-go="${l.id}">Go haggle 🎃</button>
+        <div class="err" id="err-${l.id}"></div>
+      </div>
+    </div>`).join("")
+  for (const b of document.querySelectorAll("[data-toggle]")) b.onclick = () => { openCard = openCard === b.dataset.toggle ? null : b.dataset.toggle; renderListings() }
+  for (const b of document.querySelectorAll("[data-go]")) b.onclick = () => sendAgent(b.dataset.go)
+}
+
+function renderTabs() {
+  const orders = [...state.orders].reverse()
+  if (!pinned || !orders.some((o) => o.id === selected)) selected = (orders.find((o) => o.status === "open") ?? orders[0])?.id ?? null
+  const listing = (id) => state.listings.find((l) => l.id === id)
+  const key = JSON.stringify([selected, orders.map((o) => [o.id, o.status, o.finalCents])])
+  if (key === renderTabs.key) return
+  renderTabs.key = key
+  $("tabs").innerHTML = orders.slice(0, 12).map((o) => `<button class="ghost ${o.id === selected ? "active" : ""}" data-order="${o.id}">
+    ${avatar(o.sellerId)} ↔ ${avatar(o.buyerId)} ${esc(listing(o.listingId)?.emoji ?? "")} ${o.status === "open" ? "· live" : o.status === "deal" ? "· " + usd(o.finalCents) : "· " + o.status}</button>`).join("")
+  for (const b of document.querySelectorAll("[data-order]")) b.onclick = () => { selected = b.dataset.order; pinned = true; render() }
+}
+
+function bubble(el, move) {
+  if (!move) return el.classList.remove("show")
+  const kind = { OFFER: "OFFER", COUNTER: "COUNTER", ACCEPT: "DEAL!", REJECT: "WALKING AWAY" }[move.type]
+  el.innerHTML = `<div class="kind">${kind}${move.priceCents ? ` · <span class="amt">${usd(move.priceCents)}</span>` : ""}</div>${esc(move.text)}`
+  el.classList.add("show")
+}
+
+function renderStage() {
+  const o = state.orders.find((o) => o.id === selected)
+  for (const id of ["stall", "cSeller", "cBuyer"]) $(id).style.display = o ? "" : "none"
+  $("empty").style.display = o ? "none" : ""
+  if (!o) { bubble($("bSeller")); bubble($("bBuyer")); $("thinking").style.display = "none"; $("banner").className = "banner"; return }
+  const name = (id) => state.users.find((u) => u.id === id)?.name ?? id
+  const l = state.listings.find((l) => l.id === o.listingId)
+  $("stallItem").textContent = l?.emoji ?? "📦"
+  for (const [el, id] of [[$("cSeller"), o.sellerId], [$("cBuyer"), o.buyerId]]) {
+    el.querySelector(".body").textContent = avatar(id)
+    el.querySelector(".name").textContent = name(id)
+  }
+  const lastBy = (id) => [...o.moves].reverse().find((m) => m.from === id)
+  bubble($("bSeller"), lastBy(o.sellerId))
+  bubble($("bBuyer"), lastBy(o.buyerId))
+  const last = o.moves.at(-1)
+  if (last && last.moveId !== lastMoveId) {
+    lastMoveId = last.moveId
+    const who = last.from === o.sellerId ? $("cSeller") : $("cBuyer")
+    who.classList.remove("talking"); void who.offsetWidth; who.classList.add("talking")
+  }
+  const t = $("thinking")
+  t.style.display = o.turn ? "" : "none"
+  t.className = "thinking " + (o.turn === o.sellerId ? "seller" : "buyer")
+  const b = $("banner")
+  b.className = "banner " + (o.status === "open" ? "" : o.status)
+  b.textContent = o.status === "deal" ? `SOLD for ${usd(o.finalCents)} 💸` : o.status === "walked" ? "No deal 👋" : o.status === "expired" ? "Deadline passed ⌛" : ""
+
+  $("moves").innerHTML = o.moves.map((m) => `<span class="chip ${m.from === o.sellerId ? "seller" : "buyer"} ${m.type}">${avatar(m.from)} ${m.type === "REJECT" ? "walks" : usd(m.priceCents)}</span>`).join(" → ")
+  renderChart(o, l)
+  renderLogs(o, name)
+}
+
+function renderChart(o, l) {
+  const priced = o.moves.filter((m) => m.priceCents)
+  if (!priced.length) return ($("chart").innerHTML = "")
+  const vals = priced.map((m) => m.priceCents).concat(l ? [l.askCents] : [])
+  const lo = Math.min(...vals) * 0.95, hi = Math.max(...vals) * 1.02
+  const x = (i) => 20 + (i * 190) / Math.max(1, priced.length - 1), y = (v) => 100 - ((v - lo) / (hi - lo)) * 90
+  const line = (id, color) => {
+    const pts = priced.map((m, i) => [m, i]).filter(([m]) => m.from === id).map(([m, i]) => `${x(i)},${y(m.priceCents)}`)
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>` +
+      pts.map((p) => `<circle cx="${p.split(",")[0]}" cy="${p.split(",")[1]}" r="3.5" fill="${color}"/>`).join("")
+  }
+  const ask = l ? `<line x1="16" x2="214" y1="${y(l.askCents)}" y2="${y(l.askCents)}" stroke="#ffffff33" stroke-dasharray="4 4"/><text x="18" y="${y(l.askCents) - 3}">ask ${usd(l.askCents)}</text>` : ""
+  $("chart").innerHTML = ask + line(o.sellerId, "#a479ff") + line(o.buyerId, "#ff8a2a")
+}
+
+function renderLogs(o, name) {
+  const log = (id) => {
+    const u = state.users.find((u) => u.id === id)
+    const rows = (u?.activity ?? []).filter((e) => e.orderId === o.id).reverse()
+    return rows.map((e) => `<div class="entry ${e.kind}"><time>${new Date(e.at).toLocaleTimeString([], { minute: "2-digit", second: "2-digit" })}</time>${esc(e.text)}</div>`).join("") || `<div class="note">Nothing yet.</div>`
+  }
+  $("sellerLogTitle").textContent = `${avatar(o.sellerId)} ${name(o.sellerId)}'s agent`
+  $("buyerLogTitle").textContent = `${avatar(o.buyerId)} ${name(o.buyerId)}'s agent`
+  $("sellerLog").innerHTML = log(o.sellerId)
+  $("buyerLog").innerHTML = log(o.buyerId)
+}
+
+function render() { renderMe(); renderListings(); renderTabs(); renderStage() }
+
+async function refresh() {
+  try { state = await (await fetch("/api/state")).json(); render() } catch {}
+}
+refresh()
+setInterval(refresh, 800)
+</script>
+</body>
+</html>

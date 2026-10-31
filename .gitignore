@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.db
+*.db-*
+.agentworkforce/
+.terse/
+dist/
+relay/ws.json
+*.log

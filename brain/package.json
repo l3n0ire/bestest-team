@@ -1,0 +1,10 @@
+{
+  "name": "brain",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@agent-relay/sdk": "^15.0.1",
+    "openai": "^7.47.0",
+    "zod": "^4.6.7"
+  }
+}
