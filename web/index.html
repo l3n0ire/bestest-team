@@ -84,6 +84,10 @@
   .banner.deal { display: block; background: var(--green); color: #062612; animation: pop .5s; }
   .banner.walked, .banner.expired { display: block; background: var(--red); color: #2a0006; }
   @keyframes pop { from { transform: translateX(-50%) scale(.6); } }
+  .banner .win { font-size: 13px; font-weight: 500; margin-top: 6px; line-height: 1.45; text-align: center; }
+  .banner.deal { width: min(560px, 92%); text-align: center; }
+  .hud { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; align-items: flex-start; }
+  .hud .pill.flash { background: var(--red); color: #2a0006; border-color: var(--red); }
   .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
   .ticker { display: grid; grid-template-columns: 1fr 220px; gap: 16px; }
   @media (max-width: 700px) { .ticker { grid-template-columns: 1fr; } }
@@ -139,6 +143,7 @@
       <div class="bubble buyer" id="bBuyer"></div>
       <div class="thinking" id="thinking" style="display:none"><span>•</span><span>•</span><span>•</span></div>
       <div class="banner" id="banner"></div>
+      <div class="hud" id="hud"></div>
     </div>
     <div class="panel ticker">
       <div><h2>Offer ticker</h2><div class="moves" id="moves"></div></div>
@@ -155,7 +160,8 @@
 
 <script>
 const $ = (id) => document.getElementById(id)
-const usd = (c) => "$" + Math.round(c / 100).toLocaleString()
+const MAX_MOVES = 10 // keep in sync with brain/negotiate.ts
+const usd = (c) =>"$" + Math.round(c / 100).toLocaleString()
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
 const AVATARS = { ghosty: "👻", pumpkin: "🎃", dracula: "🧛", wendy: "🧙", skelly: "💀", frank: "🧟" }
 const POOL = ["🦇", "🕷️", "🧌", "👹", "🐈‍⬛", "🦉", "🧝", "👽"]
@@ -272,7 +278,7 @@ function renderStage() {
   const o = state.orders.find((o) => o.id === selected)
   for (const id of ["stall", "cSeller", "cBuyer"]) $(id).style.display = o ? "" : "none"
   $("empty").style.display = o ? "none" : ""
-  if (!o) { bubble($("bSeller")); bubble($("bBuyer")); $("thinking").style.display = "none"; $("banner").className = "banner"; return }
+  if (!o) { bubble($("bSeller")); bubble($("bBuyer")); $("thinking").style.display = "none"; $("banner").className = "banner"; $("hud").innerHTML = ""; return }
   const name = (id) => state.users.find((u) => u.id === id)?.name ?? id
   const l = state.listings.find((l) => l.id === o.listingId)
   $("stallItem").textContent = l?.emoji ?? "📦"
@@ -295,6 +301,16 @@ function renderStage() {
   const b = $("banner")
   b.className = "banner " + (o.status === "open" ? "" : o.status)
   b.textContent = o.status === "deal" ? `SOLD for ${usd(o.finalCents)} 💸` : o.status === "walked" ? "No deal 👋" : o.status === "expired" ? "Deadline passed ⌛" : ""
+  const r = o.reveal
+  if (o.status === "deal" && r?.floorCents && r?.ceilingCents)
+    b.innerHTML = `SOLD for ${usd(o.finalCents)} 💸<div class="win">` +
+      `${avatar(o.buyerId)} ${esc(name(o.buyerId))} paid <b>${usd(r.ceilingCents - o.finalCents)} under</b> their secret max · ` +
+      `${avatar(o.sellerId)} ${esc(name(o.sellerId))} got <b>${usd(o.finalCents - r.floorCents)} over</b> their secret floor` +
+      `<br>Both won. Neither agent ever saw the other's number.</div>`
+  // Trust HUD: the round cap and the limit guard are enforced in code; show both live.
+  const blocked = state.users.flatMap((u) => u.activity ?? []).filter((e) => e.orderId === o.id && e.kind === "blocked").length
+  $("hud").innerHTML = `<span class="pill">Round ${Math.min(o.moves.length, MAX_MOVES)} / ${MAX_MOVES} · cap enforced in code</span>` +
+    `<span class="pill ${blocked ? "flash" : ""}">🔒 ${blocked} move${blocked === 1 ? "" : "s"} blocked by limit guard</span>`
 
   $("moves").innerHTML = o.moves.map((m) => `<span class="chip ${m.from === o.sellerId ? "seller" : "buyer"} ${m.type}">${avatar(m.from)} ${m.type === "REJECT" ? "walks" : usd(m.priceCents)}</span>`).join(" → ")
   renderChart(o, l)
@@ -304,7 +320,8 @@ function renderStage() {
 function renderChart(o, l) {
   const priced = o.moves.filter((m) => m.priceCents)
   if (!priced.length) return ($("chart").innerHTML = "")
-  const vals = priced.map((m) => m.priceCents).concat(l ? [l.askCents] : [])
+  const zone = o.reveal?.floorCents && o.reveal?.ceilingCents ? o.reveal : null
+  const vals = priced.map((m) => m.priceCents).concat(l ? [l.askCents] : [], zone ? [zone.floorCents, zone.ceilingCents] : [])
   const lo = Math.min(...vals) * 0.95, hi = Math.max(...vals) * 1.02
   const x = (i) => 20 + (i * 190) / Math.max(1, priced.length - 1), y = (v) => 100 - ((v - lo) / (hi - lo)) * 90
   const line = (id, color) => {
@@ -313,7 +330,10 @@ function renderChart(o, l) {
       pts.map((p) => `<circle cx="${p.split(",")[0]}" cy="${p.split(",")[1]}" r="3.5" fill="${color}"/>`).join("")
   }
   const ask = l ? `<line x1="16" x2="214" y1="${y(l.askCents)}" y2="${y(l.askCents)}" stroke="#ffffff33" stroke-dasharray="4 4"/><text x="18" y="${y(l.askCents) - 3}">ask ${usd(l.askCents)}</text>` : ""
-  $("chart").innerHTML = ask + line(o.sellerId, "#a479ff") + line(o.buyerId, "#ff8a2a")
+  // Revealed after a deal: the hidden zone between seller floor and buyer ceiling, which the final price landed inside.
+  const band = zone ? `<rect x="16" width="198" y="${y(zone.ceilingCents)}" height="${y(zone.floorCents) - y(zone.ceilingCents)}" fill="#6ff0a033" stroke="#6ff0a088" stroke-dasharray="3 3"/>` +
+    `<text x="140" y="${y(zone.ceilingCents) + 10}" style="fill:#6ff0a0">hidden deal zone</text>` : ""
+  $("chart").innerHTML = band + ask + line(o.sellerId, "#a479ff") + line(o.buyerId, "#ff8a2a")
 }
 
 function renderLogs(o, name) {

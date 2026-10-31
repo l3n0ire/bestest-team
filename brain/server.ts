@@ -16,7 +16,25 @@ async function snapshot() {
         Promise.all(orderIds.map((id) => actors.Order.get(id).read())),
         Promise.all(userIds.map(async (id) => ({ id, ...(await actors.User.get(id).publicView()) }))),
     ])
-    return { listings: listings.filter(Boolean), orders: orders.filter(Boolean), users }
+    // Reasoning and blocked moves hint at limits ("$650 is below your floor"), so they stay sealed unless the order closed
+    // as a deal (item sold, limits no longer useful). A walked order stays sealed: the listing reopens and the floor still matters.
+    const live = new Set(orders.filter((o) => o && o.status !== "deal").map((o) => o!.id))
+    const sealed = users.map((u) => ({
+        ...u,
+        activity: u.activity.map((e) => {
+            if (!e.orderId || !live.has(e.orderId)) return e
+            if (e.kind === "blocked") return { ...e, text: "🔒 A move was blocked by its owner's limit (details sealed until the deal closes)" }
+            if (e.kind === "decision") return { ...e, text: `${e.text.split(":")[0]} · 🔒 reasoning sealed until the deal closes` }
+            return e
+        }),
+    }))
+    // Post-deal reveal: both secret limits, so the audience sees the price landed inside a zone neither agent could see.
+    const revealed = await Promise.all(orders.filter(Boolean).map(async (o) => {
+        if (o!.status !== "deal") return o
+        const [floor, ceiling] = await Promise.all([actors.User.get(o!.sellerId).mandate(o!.listingId), actors.User.get(o!.buyerId).mandate(o!.listingId)])
+        return { ...o!, reveal: { floorCents: floor?.limitCents, ceilingCents: ceiling?.limitCents } }
+    }))
+    return { listings: listings.filter(Boolean), orders: revealed, users: sealed }
 }
 
 type Body = Record<string, unknown>
@@ -48,6 +66,9 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
         if (!buyerId || !listing || !ceiling) return bad("need a listing and a ceiling")
         if (listing.status === "sold") return bad("already sold")
         if (listing.sellerId === buyerId) return bad("that's your own listing")
+        // One try per buyer per listing, like a sealed bid. Otherwise a buyer could walk, raise the ceiling and retry until
+        // the floor is found. The mandate stays on the User actor after the order ends, so it doubles as the attempt record.
+        if (await actors.User.get(buyerId).mandate(listingId)) return bad("one try per item: your agent already haggled for this, so nobody can probe the seller's floor")
         const deadlineSec = Number(b.deadlineSec)
         await actors.User.get(buyerId).setMandate(listingId, {
             side: "buy",

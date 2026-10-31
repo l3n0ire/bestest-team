@@ -59,10 +59,13 @@ export async function seed() {
         await createListing({ id: slug(title), sellerId, emoji, title, condition, askCents: ask * 100 }, Math.round(ask * 0.78) * 100)
 }
 
-// The scripted stage demo: Pumpkin's agent goes after Ghosty's iPhone with a $650 ceiling.
+// The scripted stage demo: Pumpkin's agent goes after Ghosty's iPhone ($750 ask, secret $585 floor) with a secret $700
+// ceiling. The $585-$700 zone is wide enough that both sides end up ahead. A fresh listing per run keeps the demo repeatable.
 export async function startDemo() {
     await seed()
     await createUser("pumpkin", "Pumpkin")
-    await actors.User.get("pumpkin").setMandate("iphone-14-pro-128gb", { side: "buy", limitCents: 65000 })
-    return openOrder("pumpkin", "iphone-14-pro-128gb")
+    const id = `iphone-demo-${Date.now().toString(36)}`
+    await createListing({ id, sellerId: "ghosty", emoji: "📱", title: "iPhone 14 Pro 128GB", condition: "Good, 89% battery", askCents: 75000 }, 58500)
+    await actors.User.get("pumpkin").setMandate(id, { side: "buy", limitCents: 70000 })
+    return openOrder("pumpkin", id)
 }
