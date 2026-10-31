@@ -40,7 +40,8 @@ export function fixedStrategy({ order, mandate, listing, self }: Context): Decis
 
 const openai = process.env.OPENAI_API_KEY ? new (await import("openai")).default() : undefined
 // Cheap, non-reasoning model by default; the call cap stops a runaway loop from spending credits.
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-5.4-nano"
+// `||`, not `??`: .env.example ships an empty OPENAI_MODEL=, and "" made every call fail with a 400.
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-nano"
 const MAX_CALLS = 300
 let calls = 0
 

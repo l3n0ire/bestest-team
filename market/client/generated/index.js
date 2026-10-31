@@ -23,9 +23,11 @@ export const actors = {
                 "Listing",
                 actorId,
                 [
+                    { name: "addOrder", result: "value" },
+                    { name: "claim", result: "value" },
                     { name: "create", result: "value" },
                     { name: "read", result: "value" },
-                    { name: "setStatus", result: "void" }
+                    { name: "removeOrder", result: "void" }
                 ],
                 transport
             )
@@ -69,6 +71,7 @@ export const actors = {
                 actorId,
                 [
                     { name: "applyMove", result: "value" },
+                    { name: "close", result: "void" },
                     { name: "open", result: "value" },
                     { name: "read", result: "value" },
                     { name: "setDm", result: "void" },
@@ -92,12 +95,17 @@ export const actors = {
                 "User",
                 actorId,
                 [
-                    { name: "adjustEscrow", result: "value" },
                     { name: "authorize", result: "value" },
+                    { name: "available", result: "value" },
+                    { name: "credit", result: "void" },
+                    { name: "debit", result: "void" },
+                    { name: "deposit", result: "void" },
+                    { name: "hold", result: "value" },
                     { name: "log", result: "void" },
                     { name: "mandate", result: "value" },
                     { name: "profile", result: "value" },
                     { name: "publicView", result: "value" },
+                    { name: "release", result: "void" },
                     { name: "setMandate", result: "void" },
                     { name: "setRelayToken", result: "void" },
                     { name: "setup", result: "void" }

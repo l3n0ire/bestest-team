@@ -77,11 +77,17 @@ interface $ListingContract {
     Outgoing
     State: {
         listing: ListingData | null
+        activeOrders: string[]
     }
     Methods: {
+        addOrder(orderId: string): Promise<boolean>
+        claim(orderId: string): Promise<{
+            ok: boolean
+            others: string[]
+        }>
         create(data: ListingData): Promise<ListingData>
         read(): Promise<ListingData | null>
-        setStatus(status: ListingData["status"]): Promise<void>
+        removeOrder(orderId: string): Promise<void>
     }
 }
 interface $MarketContract {
@@ -116,6 +122,7 @@ interface $OrderContract {
             applied: boolean
             reason?: string
         }>
+        close(reason: string): Promise<void>
         open(data: Pick<OrderData, "id" | "listingId" | "buyerId" | "sellerId">): Promise<OrderData>
         read(): Promise<OrderData | null>
         setDm(dmId: string): Promise<void>
@@ -133,10 +140,16 @@ interface $UserContract {
         mandates: Record<string, Mandate>
         activity: ActivityEntry[]
         escrowCents: number
+        holds: Record<string, number>
+        settled: Record<string, true>
     }
     Methods: {
-        adjustEscrow(deltaCents: number): Promise<number>
         authorize(listingId: string, move: Move, standing: Standing | null, self: string): Promise<Verdict>
+        available(): Promise<number>
+        credit(orderId: string, cents: number): Promise<void>
+        debit(orderId: string, cents: number): Promise<void>
+        deposit(cents: number): Promise<void>
+        hold(orderId: string, cents: number): Promise<boolean>
         log(entry: Omit<ActivityEntry, "at">): Promise<void>
         mandate(listingId: string): Promise<Mandate | null>
         profile(): Promise<{
@@ -147,8 +160,10 @@ interface $UserContract {
         publicView(): Promise<{
             name: string
             escrowCents: number
+            heldCents: number
             activity: ActivityEntry[]
         }>
+        release(orderId: string): Promise<void>
         setMandate(listingId: string, mandate: Mandate): Promise<void>
         setRelayToken(token: string): Promise<void>
         setup(name: string, agentName: string): Promise<void>
@@ -168,6 +183,7 @@ type ListingData = {
     askCents: number
     emoji: string
     status: "open" | "negotiating" | "sold"
+    soldTo?: string
 }
 type Mandate = {
     side: Side
@@ -188,6 +204,7 @@ type OrderData = {
     status: "open" | "deal" | "walked" | "expired"
     finalCents?: number
     escrow: "none" | "held" | "released"
+    closedReason?: string
 }
 type Side = "buy" | "sell"
 type Standing = {

@@ -22,9 +22,18 @@ export async function createListing(data: Omit<ListingData, "status">, floorCent
 export async function openOrder(buyerId: string, listingId: string) {
     const listing = await actors.Listing.get(listingId).read()
     if (!listing) throw new Error("no such listing")
-    const orderId = `order-${Date.now().toString(36)}`
+    // Random suffix: two buyers opening in the same millisecond must not share one Order actor.
+    const orderId = `order-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`
+    const buyer = actors.User.get(buyerId)
+    // Reserve the full ceiling up front, so one balance can't back more ceilings than it covers.
+    const ceiling = (await buyer.mandate(listingId))?.limitCents ?? 0
+    if (!(await buyer.hold(orderId, ceiling))) throw new Error("not enough escrow to cover that ceiling")
     await actors.Order.get(orderId).open({ id: orderId, listingId, buyerId, sellerId: listing.sellerId })
-    await actors.Listing.get(listingId).setStatus("negotiating")
+    if (!(await actors.Listing.get(listingId).addOrder(orderId))) {
+        await actors.Order.get(orderId).close("already sold")
+        await buyer.release(orderId)
+        throw new Error("already sold")
+    }
     await market.addOrder(orderId)
     void takeTurn(orderId)
     return orderId
@@ -64,6 +73,8 @@ export async function seed() {
 export async function startDemo() {
     await seed()
     await createUser("pumpkin", "Pumpkin")
+    // Top up so repeated demo runs never fail the escrow hold.
+    if ((await actors.User.get("pumpkin").available()) < 70000) await actors.User.get("pumpkin").deposit(200000)
     const id = `iphone-demo-${Date.now().toString(36)}`
     await createListing({ id, sellerId: "ghosty", emoji: "📱", title: "iPhone 14 Pro 128GB", condition: "Good, 89% battery", askCents: 75000 }, 58500)
     await actors.User.get("pumpkin").setMandate(id, { side: "buy", limitCents: 70000 })

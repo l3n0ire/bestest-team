@@ -69,6 +69,9 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
         // One try per buyer per listing, like a sealed bid. Otherwise a buyer could walk, raise the ceiling and retry until
         // the floor is found. The mandate stays on the User actor after the order ends, so it doubles as the attempt record.
         if (await actors.User.get(buyerId).mandate(listingId)) return bad("one try per item: your agent already haggled for this, so nobody can probe the seller's floor")
+        // Checked before the try is spent; openOrder's hold re-checks atomically in the actor.
+        const available = await actors.User.get(buyerId).available()
+        if (available < ceiling) return bad(`not enough escrow for that ceiling: $${Math.floor(available / 100).toLocaleString()} available (the rest is on hold for your live orders)`)
         const deadlineSec = Number(b.deadlineSec)
         await actors.User.get(buyerId).setMandate(listingId, {
             side: "buy",

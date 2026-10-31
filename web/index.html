@@ -223,7 +223,7 @@ function renderMe() {
   $("join").style.display = me ? "none" : ""
   $("sellBox").style.display = me ? "" : "none"
   const u = me && state.users.find((u) => u.id === me.id)
-  $("me").innerHTML = u ? `<span class="pill">${avatar(u.id)} ${esc(u.name)}</span><span class="pill">Escrow ${usd(u.escrowCents)}</span>` : ""
+  $("me").innerHTML = u ? `<span class="pill">${avatar(u.id)} ${esc(u.name)}</span><span class="pill">Escrow ${usd(u.escrowCents)}${u.heldCents ? ` · ${usd(u.heldCents)} on hold` : ""}</span>` : ""
 }
 
 function renderListings() {
@@ -300,7 +300,7 @@ function renderStage() {
   t.className = "thinking " + (o.turn === o.sellerId ? "seller" : "buyer")
   const b = $("banner")
   b.className = "banner " + (o.status === "open" ? "" : o.status)
-  b.textContent = o.status === "deal" ? `SOLD for ${usd(o.finalCents)} 💸` : o.status === "walked" ? "No deal 👋" : o.status === "expired" ? "Deadline passed ⌛" : ""
+  b.textContent = o.status === "deal" ? `SOLD for ${usd(o.finalCents)} 💸` : o.status === "walked" ? (o.closedReason === "sold to another buyer" ? "Sold to someone else 🏃" : "No deal 👋") : o.status === "expired" ? "Deadline passed ⌛" : ""
   const r = o.reveal
   if (o.status === "deal" && r?.floorCents && r?.ceilingCents)
     b.innerHTML = `SOLD for ${usd(o.finalCents)} 💸<div class="win">` +

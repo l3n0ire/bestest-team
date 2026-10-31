@@ -96,6 +96,14 @@ export declare namespace actors {
     namespace Listing {
         type Stub = $ActorTypes["Listing"]["Methods"]
         interface $MethodTypes {
+            ["addOrder"]: {
+                Args: Parameters<Stub["addOrder"]>
+                Result: Awaited<ReturnType<Stub["addOrder"]>>
+            }
+            ["claim"]: {
+                Args: Parameters<Stub["claim"]>
+                Result: Awaited<ReturnType<Stub["claim"]>>
+            }
             ["create"]: {
                 Args: Parameters<Stub["create"]>
                 Result: Awaited<ReturnType<Stub["create"]>>
@@ -104,19 +112,27 @@ export declare namespace actors {
                 Args: Parameters<Stub["read"]>
                 Result: Awaited<ReturnType<Stub["read"]>>
             }
-            ["setStatus"]: {
-                Args: Parameters<Stub["setStatus"]>
-                Result: Awaited<ReturnType<Stub["setStatus"]>>
+            ["removeOrder"]: {
+                Args: Parameters<Stub["removeOrder"]>
+                Result: Awaited<ReturnType<Stub["removeOrder"]>>
             }
         }
         interface Methods extends $MethodTypes {}
         /**
          * Types for a method's arguments and return value.
          * @example
-         * type Args = actors.Listing.Methods["create"]["Args"]
-         * type Result = actors.Listing.Methods["create"]["Result"]
+         * type Args = actors.Listing.Methods["addOrder"]["Args"]
+         * type Result = actors.Listing.Methods["addOrder"]["Result"]
          */
         namespace Methods {
+            namespace addOrder {
+                type Args = $MethodTypes["addOrder"]["Args"]
+                type Result = $MethodTypes["addOrder"]["Result"]
+            }
+            namespace claim {
+                type Args = $MethodTypes["claim"]["Args"]
+                type Result = $MethodTypes["claim"]["Result"]
+            }
             namespace create {
                 type Args = $MethodTypes["create"]["Args"]
                 type Result = $MethodTypes["create"]["Result"]
@@ -125,9 +141,9 @@ export declare namespace actors {
                 type Args = $MethodTypes["read"]["Args"]
                 type Result = $MethodTypes["read"]["Result"]
             }
-            namespace setStatus {
-                type Args = $MethodTypes["setStatus"]["Args"]
-                type Result = $MethodTypes["setStatus"]["Result"]
+            namespace removeOrder {
+                type Args = $MethodTypes["removeOrder"]["Args"]
+                type Result = $MethodTypes["removeOrder"]["Result"]
             }
         }
     }
@@ -184,6 +200,10 @@ export declare namespace actors {
                 Args: Parameters<Stub["applyMove"]>
                 Result: Awaited<ReturnType<Stub["applyMove"]>>
             }
+            ["close"]: {
+                Args: Parameters<Stub["close"]>
+                Result: Awaited<ReturnType<Stub["close"]>>
+            }
             ["open"]: {
                 Args: Parameters<Stub["open"]>
                 Result: Awaited<ReturnType<Stub["open"]>>
@@ -213,6 +233,10 @@ export declare namespace actors {
                 type Args = $MethodTypes["applyMove"]["Args"]
                 type Result = $MethodTypes["applyMove"]["Result"]
             }
+            namespace close {
+                type Args = $MethodTypes["close"]["Args"]
+                type Result = $MethodTypes["close"]["Result"]
+            }
             namespace open {
                 type Args = $MethodTypes["open"]["Args"]
                 type Result = $MethodTypes["open"]["Result"]
@@ -234,13 +258,29 @@ export declare namespace actors {
     namespace User {
         type Stub = $ActorTypes["User"]["Methods"]
         interface $MethodTypes {
-            ["adjustEscrow"]: {
-                Args: Parameters<Stub["adjustEscrow"]>
-                Result: Awaited<ReturnType<Stub["adjustEscrow"]>>
-            }
             ["authorize"]: {
                 Args: Parameters<Stub["authorize"]>
                 Result: Awaited<ReturnType<Stub["authorize"]>>
+            }
+            ["available"]: {
+                Args: Parameters<Stub["available"]>
+                Result: Awaited<ReturnType<Stub["available"]>>
+            }
+            ["credit"]: {
+                Args: Parameters<Stub["credit"]>
+                Result: Awaited<ReturnType<Stub["credit"]>>
+            }
+            ["debit"]: {
+                Args: Parameters<Stub["debit"]>
+                Result: Awaited<ReturnType<Stub["debit"]>>
+            }
+            ["deposit"]: {
+                Args: Parameters<Stub["deposit"]>
+                Result: Awaited<ReturnType<Stub["deposit"]>>
+            }
+            ["hold"]: {
+                Args: Parameters<Stub["hold"]>
+                Result: Awaited<ReturnType<Stub["hold"]>>
             }
             ["log"]: {
                 Args: Parameters<Stub["log"]>
@@ -257,6 +297,10 @@ export declare namespace actors {
             ["publicView"]: {
                 Args: Parameters<Stub["publicView"]>
                 Result: Awaited<ReturnType<Stub["publicView"]>>
+            }
+            ["release"]: {
+                Args: Parameters<Stub["release"]>
+                Result: Awaited<ReturnType<Stub["release"]>>
             }
             ["setMandate"]: {
                 Args: Parameters<Stub["setMandate"]>
@@ -275,17 +319,33 @@ export declare namespace actors {
         /**
          * Types for a method's arguments and return value.
          * @example
-         * type Args = actors.User.Methods["adjustEscrow"]["Args"]
-         * type Result = actors.User.Methods["adjustEscrow"]["Result"]
+         * type Args = actors.User.Methods["authorize"]["Args"]
+         * type Result = actors.User.Methods["authorize"]["Result"]
          */
         namespace Methods {
-            namespace adjustEscrow {
-                type Args = $MethodTypes["adjustEscrow"]["Args"]
-                type Result = $MethodTypes["adjustEscrow"]["Result"]
-            }
             namespace authorize {
                 type Args = $MethodTypes["authorize"]["Args"]
                 type Result = $MethodTypes["authorize"]["Result"]
+            }
+            namespace available {
+                type Args = $MethodTypes["available"]["Args"]
+                type Result = $MethodTypes["available"]["Result"]
+            }
+            namespace credit {
+                type Args = $MethodTypes["credit"]["Args"]
+                type Result = $MethodTypes["credit"]["Result"]
+            }
+            namespace debit {
+                type Args = $MethodTypes["debit"]["Args"]
+                type Result = $MethodTypes["debit"]["Result"]
+            }
+            namespace deposit {
+                type Args = $MethodTypes["deposit"]["Args"]
+                type Result = $MethodTypes["deposit"]["Result"]
+            }
+            namespace hold {
+                type Args = $MethodTypes["hold"]["Args"]
+                type Result = $MethodTypes["hold"]["Result"]
             }
             namespace log {
                 type Args = $MethodTypes["log"]["Args"]
@@ -302,6 +362,10 @@ export declare namespace actors {
             namespace publicView {
                 type Args = $MethodTypes["publicView"]["Args"]
                 type Result = $MethodTypes["publicView"]["Result"]
+            }
+            namespace release {
+                type Args = $MethodTypes["release"]["Args"]
+                type Result = $MethodTypes["release"]["Result"]
             }
             namespace setMandate {
                 type Args = $MethodTypes["setMandate"]["Args"]
