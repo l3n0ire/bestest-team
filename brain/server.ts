@@ -1,4 +1,5 @@
 import { actors } from "../market/client/generated/index.js"
+import { llmStats } from "./negotiate.js"
 import { createListing, createUser, market, openOrder, startAttack, startDemo } from "./seed.js"
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24)
@@ -36,7 +37,7 @@ async function snapshot() {
         const [floor, ceiling] = await Promise.all([actors.User.get(o!.sellerId).mandate(o!.listingId), actors.User.get(o!.buyerId).mandate(o!.listingId)])
         return { ...o!, reveal: { floorCents: floor?.limitCents, ceilingCents: ceiling?.limitCents } }
     }))
-    return { listings: listings.filter(Boolean), orders: revealed, users: sealed }
+    return { listings: listings.filter(Boolean), orders: revealed, users: sealed, llm: llmStats() }
 }
 
 type Body = Record<string, unknown>

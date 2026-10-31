@@ -44,6 +44,9 @@ const openai = process.env.OPENAI_API_KEY ? new (await import("openai")).default
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-nano"
 const MAX_CALLS = 300
 let calls = 0
+let failures = 0
+// Public counters so evals can tell a real LLM haggle from a silent fallback to the fixed strategy.
+export const llmStats = () => ({ configured: !!openai, model: MODEL, calls, failures })
 
 const schema = {
     type: "object",
@@ -139,6 +142,7 @@ export async function llmStrategy(ctx: Context, blocked?: string): Promise<Decis
         if (!Number.isInteger(out.priceDollars) || out.priceDollars <= 0) return undefined
         return sane({ type: out.type, priceCents: out.priceDollars * 100, text, reasoning: out.reasoning }, ctx)
     } catch (err) {
+        failures++
         console.warn(`LLM failed, using fixed strategy: ${(err as Error).message}`)
         return undefined
     }

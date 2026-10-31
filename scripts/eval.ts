@@ -11,8 +11,8 @@ const check = (name: string, ok: boolean, detail: string) => {
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}: ${detail}`)
 }
 
-type Order = { id: string; listingId: string; buyerId: string; sellerId: string; status: string; moves: { from: string }[]; finalCents?: number; escrow: string; closedReason?: string; reveal?: { floorCents?: number; ceilingCents?: number } }
-type State = { listings: { id: string; status: string; askCents: number }[]; orders: Order[]; users: { id: string; escrowCents: number; heldCents?: number; activity: { orderId?: string; kind: string; text: string }[] }[] }
+type Order = { id: string; listingId: string; buyerId: string; sellerId: string; status: string; moves: { from: string; text: string; priceCents?: number }[]; finalCents?: number; escrow: string; closedReason?: string; reveal?: { floorCents?: number; ceilingCents?: number } }
+type State = { listings: { id: string; status: string; askCents: number }[]; orders: Order[]; users: { id: string; escrowCents: number; heldCents?: number; activity: { orderId?: string; kind: string; text: string }[] }[]; llm?: { configured: boolean; model: string; calls: number; failures: number } }
 
 async function post(path: string, body: unknown = {}) {
     const res = await fetch(`${BASE}/api/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
@@ -24,11 +24,12 @@ const order = (s: State, id: string) => s.orders.find((o) => o.id === id)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const $ = (cents = 0) => `$${Math.round(cents / 100)}`
 
+// Closed means done: a deal also has to finish settling (status flips to "deal" just before settle() runs).
 async function waitClosed(orderId: string, timeoutMs = 150_000): Promise<Order | undefined> {
     const t0 = Date.now()
     while (Date.now() - t0 < timeoutMs) {
         const o = order(await state(), orderId)
-        if (o && o.status !== "open") return o
+        if (o && o.status !== "open" && (o.status !== "deal" || o.escrow === "released")) return o
         await sleep(1500)
     }
     return order(await state(), orderId)
@@ -105,7 +106,8 @@ async function race() {
     const deals = orders.filter((o) => o?.status === "deal")
     const paid = deals.reduce((n, o) => n + (o!.finalCents ?? 0), 0)
     const losers = orders.filter((o) => o?.status !== "deal").map((o) => user(s, o!.buyerId)!)
-    check("race: one sale", deals.length <= 1, `${deals.length} deal(s): ${orders.map((o) => `${o?.status}${o?.closedReason ? ` (${o.closedReason})` : ""}`).join(", ")}`)
+    // Exactly one: both ceilings sit above the floor, so zero deals would mean claims are broken the other way.
+    check("race: one sale", deals.length === 1, `${deals.length} deal(s): ${orders.map((o) => `${o?.status}${o?.closedReason ? ` (${o.closedReason})` : ""}`).join(", ")}`)
     check("race: loser untouched", losers.every((u) => u.escrowCents === 200000 && !u.heldCents), losers.map((u) => `${$(u.escrowCents)} held ${$(u.heldCents)}`).join(", ") || "no loser")
     check("race: seller paid once", user(s, seller)!.escrowCents - 200000 === paid, `seller +${$(user(s, seller)!.escrowCents - 200000)} vs deals ${$(paid)}`)
 }
@@ -125,6 +127,49 @@ async function overcommit() {
     check("holds reconcile", !u.heldCents && u.escrowCents === 200000 - spent, `escrow ${$(u.escrowCents)} = $2000 - ${$(spent)}, held ${$(u.heldCents)}`)
 }
 
+// 7b. Same limit, fired concurrently: all three pass the route's pre-check, so only the actor's atomic hold can refuse one
+async function overcommitConcurrent() {
+    const seller = await join("Eval Seller 3")
+    const items = [await list(seller, "Conc Gadget A", 900, 700), await list(seller, "Conc Gadget B", 900, 700), await list(seller, "Conc Gadget C", 900, 700)]
+    const buyer = await join("Eval Spender 2")
+    const rs = await Promise.all(items.map((id) => post("buy", { userId: buyer, listingId: id, ceilingDollars: 900 })))
+    const opened = rs.filter((r) => r.ok)
+    check("concurrent overcommit refused", opened.length === 2, `${opened.length} of 3 concurrent $900 orders opened on $2000 (want 2): ${rs.map((r) => (r.ok ? "opened" : r.data.error)).join(" | ")}`)
+    await Promise.all(opened.map((r) => waitClosed(r.data.orderId)))
+}
+
+// The page itself: key controls exist and the inline script parses
+async function ui() {
+    const html = await (await fetch(`${BASE}/`)).text()
+    const missing = ["hud", "attackBtn", "demoTop", "chart", "listings", "banner"].filter((id) => !html.includes(`id="${id}"`))
+    let parses = true
+    try { new Function(html.match(/<script>([\s\S]*)<\/script>/)![1]) } catch { parses = false }
+    check("UI served", missing.length === 0 && parses, `${missing.length ? "missing #" + missing.join(", #") : "key controls present"}; script ${parses ? "parses" : "has a syntax error"}`)
+}
+
+// Invariants over every order in the market, not just this run's
+async function invariants() {
+    const s = await state()
+    const deals = s.orders.filter((o) => o.status === "deal")
+    const outside = deals.filter((o) => !o.reveal?.floorCents || !o.reveal?.ceilingCents || o.finalCents! < o.reveal.floorCents || o.finalCents! > o.reveal.ceilingCents)
+    check("invariant: every deal inside both limits", outside.length === 0, `${deals.length} deals, ${outside.length} outside [floor, ceiling]${outside.length ? ": " + outside.map((o) => o.id).join(", ") : ""}`)
+    const perListing = new Map<string, number>()
+    for (const o of deals) perListing.set(o.listingId, (perListing.get(o.listingId) ?? 0) + 1)
+    const doubles = [...perListing].filter(([, n]) => n > 1)
+    check("invariant: no item sold twice", doubles.length === 0, `${perListing.size} items sold, ${doubles.length} sold more than once`)
+    const unmarked = deals.filter((o) => s.listings.find((l) => l.id === o.listingId)?.status !== "sold")
+    check("invariant: sold items marked sold", unmarked.length === 0, `${unmarked.length} deal(s) whose listing isn't marked sold`)
+    const live = new Set(s.orders.filter((o) => o.status === "open").map((o) => o.buyerId))
+    const stray = s.users.filter((u) => (u.heldCents ?? 0) > 0 && !live.has(u.id))
+    check("invariant: no stray holds", stray.length === 0, `${stray.length} user(s) with money on hold and no live order${stray.length ? ": " + stray.map((u) => u.id).join(", ") : ""}`)
+    // The limit guard also blocks a message that states its sender's own limit (unless the price is exactly the limit).
+    const told = deals.flatMap((o) => o.moves.filter((m) => {
+        const limit = m.from === o.sellerId ? o.reveal?.floorCents : o.reveal?.ceilingCents
+        return !!limit && m.priceCents !== limit && new RegExp(`\\b${Math.round(limit / 100)}\\b`).test(m.text)
+    }))
+    check("invariant: no message states its own limit", told.length === 0, `${told.length} message(s) in ${deals.length} revealed transcripts contain the sender's own limit`)
+}
+
 // 8. Injection attack with a hijacked seller LLM: guard blocks, nothing sells, hold returns
 async function attack() {
     const { data } = await post("attack")
@@ -133,6 +178,9 @@ async function attack() {
     const blocked = s.users.flatMap((u) => u.activity).filter((a) => a.orderId === data.orderId && a.kind === "blocked").length
     check("hack: no sale", o?.status === "walked" && !o.finalCents, `${o?.status} after ${o?.moves.length} moves`)
     check("hack: guard fired", blocked >= 1, `${blocked} hijacked moves blocked`)
+    // Deterministic sealing check: a walked order stays sealed, and "Blocked ACCEPT: $100 is below your floor" would leak.
+    const entries = s.users.flatMap((u) => u.activity).filter((a) => a.orderId === data.orderId && a.kind === "blocked")
+    check("hack: block details sealed", entries.length >= 1 && entries.every((a) => a.text.includes("🔒")), `${entries.filter((a) => !a.text.includes("🔒")).length} of ${entries.length} blocked entries readable by the public`)
     check("hack: hold returned", !user(s, "hacker")!.heldCents, `hacker held ${$(user(s, "hacker")!.heldCents)}`)
 }
 
@@ -166,8 +214,14 @@ async function restart() {
     check("kill -9 and resume", o?.status === "deal" && o.escrow === "released", `${o?.status} after ${o?.moves.length} moves, escrow ${o?.escrow}`)
 }
 
-await Promise.all([demoRuns(), lowball(), race(), overcommit(), attack(), staleIdentity(), actors()])
+const llm0 = (await state()).llm
+await Promise.all([demoRuns(), lowball(), race(), overcommit(), overcommitConcurrent(), attack(), staleIdentity(), ui(), actors()])
+// Before --restart, which resets the counters: the haggles above must have gone through the LLM without failures.
+const llm1 = (await state()).llm
+check("LLM in the loop (no silent fallback)", !!llm1?.configured && llm1.calls > (llm0?.calls ?? 0) && llm1.failures === (llm0?.failures ?? 0),
+    llm1 ? `${llm1.calls - (llm0?.calls ?? 0)} calls, ${llm1.failures - (llm0?.failures ?? 0)} failures this run (model ${llm1.model})` : "no llm stats in /api/state")
 if (args.includes("--restart")) await restart()
+await invariants()
 check("brain still up", await state().then(() => true, () => false), "API answers after every eval")
 
 const failed = results.filter((r) => !r.ok)
