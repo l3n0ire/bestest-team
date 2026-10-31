@@ -7,7 +7,7 @@ export type Decision =
 
 export type Context = { order: OrderData; mandate: Mandate; listing: ListingData; self: string }
 
-const MAX_MOVES = 10
+export const MAX_MOVES = 10
 const round5 = (cents: number) => Math.round(cents / 500) * 500
 
 // Deterministic haggler: split the difference, stay inside the limit, take a close-enough offer.

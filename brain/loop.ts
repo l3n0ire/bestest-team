@@ -2,7 +2,7 @@ import { actors } from "../market/client/generated/index.js"
 import type { OrderData } from "../market/actor/src/actors.js"
 import type { Verdict } from "../market/actor/src/rules.js"
 import { decodeMove, dollars, encodeMove, type Move } from "../market/actor/src/protocol.js"
-import { fixedStrategy, llmStrategy, type Context, type Decision } from "./negotiate.js"
+import { fixedStrategy, llmStrategy, MAX_MOVES, type Context, type Decision } from "./negotiate.js"
 import { agentFor, relay } from "./relay.js"
 
 const inFlight = new Set<string>()
@@ -54,9 +54,14 @@ export async function takeTurn(orderId: string) {
 }
 
 // LLM first; if the marketplace blocks it, the LLM gets one retry with the reason, then the fixed strategy, then walk away.
+// Hard round cap in code: at MAX_MOVES the LLM is skipped and the fixed strategy must ACCEPT or REJECT, so every order ends.
 async function decide(ctx: Context, authorize: (m: Move) => Promise<Verdict>) {
     let blocked: string | undefined
-    for (const attempt of [() => llmStrategy(ctx), async () => (blocked ? llmStrategy(ctx, blocked) : undefined), async () => fixedStrategy(ctx)]) {
+    const fixed = async () => fixedStrategy(ctx)
+    const attempts = ctx.order.moves.length >= MAX_MOVES
+        ? [fixed]
+        : [() => llmStrategy(ctx), async () => (blocked ? llmStrategy(ctx, blocked) : undefined), fixed]
+    for (const attempt of attempts) {
         const decision = await attempt()
         if (!decision) continue
         const move = toMove(decision, ctx.order, ctx.self)
