@@ -363,7 +363,15 @@ function renderLogs(o, name) {
 function render() { renderMe(); renderListings(); renderTabs(); renderStage() }
 
 async function refresh() {
-  try { state = await (await fetch("/api/state")).json(); render() } catch {}
+  try {
+    state = await (await fetch("/api/state")).json()
+    // After a backend reset the saved identity no longer exists: forget it so the join box comes back.
+    if (me && state.users.length && !state.users.some((u) => u.id === me.id)) {
+      me = null
+      try { localStorage.removeItem("me") } catch {}
+    }
+    render()
+  } catch {}
 }
 refresh()
 setInterval(refresh, 800)

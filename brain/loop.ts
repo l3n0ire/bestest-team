@@ -42,8 +42,17 @@ const toMove = ({ reasoning: _, ...d }: Decision, order: OrderData, self: string
 
 const describe = (m: Move) => ("priceCents" in m ? `${m.type} $${dollars(m.priceCents)}` : m.type)
 
-// Decide, authorize against the owner's limit, record, then send over Relay. Nothing unauthorized hits the wire.
+// One bad order must never take the brain (and every other live haggle) down with it.
 export async function takeTurn(orderId: string) {
+    try {
+        await turn(orderId)
+    } catch (err) {
+        console.warn(`order ${orderId}: turn failed: ${(err as Error).message}`)
+    }
+}
+
+// Decide, authorize against the owner's limit, record, then send over Relay. Nothing unauthorized hits the wire.
+async function turn(orderId: string) {
     const order = await actors.Order.get(orderId).read()
     if (!order || order.status !== "open" || !order.turn) return
     const key = `${orderId}:${order.moves.length}`
@@ -56,6 +65,10 @@ export async function takeTurn(orderId: string) {
     if (!mandate || !listing) return
     // Sold to another buyer while this order waited for its turn: nothing left to haggle over.
     if (listing.status === "sold" && listing.soldTo !== orderId) return closeOrder(orderId, "sold to another buyer")
+    // A party without an agent (e.g. a stale browser identity after a reset) can never send or receive: close, don't loop.
+    const other = self === order.buyerId ? order.sellerId : order.buyerId
+    const [me, them] = await Promise.all([user.profile(), actors.User.get(other).profile()])
+    if (!me.agentName || !them.agentName) return closeOrder(orderId, "a party never joined the market")
 
     const ctx: Context = { order, mandate, listing, self }
     const { move, reasoning } = await decide(ctx, (m) => user.authorize(order.listingId, m, order.standing ?? null, self))
@@ -72,9 +85,8 @@ export async function takeTurn(orderId: string) {
     const result = await actors.Order.get(orderId).applyMove(move)
     if (!result.applied) return console.warn(`order ${orderId}: ${describe(move)} not applied (${result.reason})`)
 
-    const other = self === order.buyerId ? order.sellerId : order.buyerId
-    const [{ agentName: to }, agent] = await Promise.all([actors.User.get(other).profile(), agentFor(self)])
-    const sent = await agent.sendMessage({ to: `@${to}`, text: encodeMove(move) })
+    const agent = await agentFor(self)
+    const sent = await agent.sendMessage({ to: `@${them.agentName}`, text: encodeMove(move) })
     if (!order.dmId && sent.conversationId) await actors.Order.get(orderId).setDm(sent.conversationId)
     console.log(`→ ${self}: ${describe(move)}  "${move.text}"`)
 
@@ -145,8 +157,12 @@ export function listen() {
     relay.addListener("dm.received", async ({ message }) => {
         const move = decodeMove(message.text ?? "")
         if (!move) return
-        // The sender already applied it; this is a no-op unless the sender crashed between apply and send.
-        await actors.Order.get(move.orderId).applyMove(move)
+        try {
+            // The sender already applied it; this is a no-op unless the sender crashed between apply and send.
+            await actors.Order.get(move.orderId).applyMove(move)
+        } catch (err) {
+            return console.warn(`order ${move.orderId}: incoming move failed: ${(err as Error).message}`)
+        }
         await Bun.sleep(PACE_MS)
         await takeTurn(move.orderId)
     })

@@ -7,6 +7,8 @@ const dollarsToCents = (v: unknown) => {
     return Number.isFinite(n) && n > 0 ? Math.round(n) * 100 : undefined
 }
 const bad = (error: string) => Response.json({ error }, { status: 400 })
+// A stale browser identity (e.g. after a reset) must not open orders for a user with no agent.
+const known = async (id: string) => !!id && !!(await actors.User.get(id).profile()).name
 
 // Public market snapshot. Mandates (limits) are never part of it.
 async function snapshot() {
@@ -54,6 +56,7 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
         const floor = dollarsToCents(b.floorDollars)
         if (!sellerId || !title || !ask || !floor) return bad("need a title, ask and floor")
         if (floor > ask) return bad("floor can't be above the ask")
+        if (!(await known(sellerId))) return bad("unknown user: join the market first")
         const id = `${slug(title)}-${Date.now().toString(36)}`
         await createListing({ id, sellerId, title, condition: String(b.condition ?? "Used").slice(0, 60), askCents: ask, emoji: String(b.emoji || "📦").slice(0, 4) }, floor)
         return Response.json({ id })
@@ -64,6 +67,7 @@ const routes: Record<string, (b: Body) => Promise<Response>> = {
         const ceiling = dollarsToCents(b.ceilingDollars)
         const listing = await actors.Listing.get(listingId).read()
         if (!buyerId || !listing || !ceiling) return bad("need a listing and a ceiling")
+        if (!(await known(buyerId))) return bad("unknown user: join the market first")
         if (listing.status === "sold") return bad("already sold")
         if (listing.sellerId === buyerId) return bad("that's your own listing")
         // One try per buyer per listing, like a sealed bid. Otherwise a buyer could walk, raise the ceiling and retry until
