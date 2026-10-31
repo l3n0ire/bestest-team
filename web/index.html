@@ -27,7 +27,8 @@
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
   .panel h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
   input, button, select { font: inherit; }
-  input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  input, textarea { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  textarea { resize: vertical; font: inherit; }
   button { background: var(--orange); color: #1a0f00; border: 0; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
   button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
   button:disabled { opacity: .5; cursor: default; }
@@ -122,8 +123,9 @@
       <summary style="cursor:pointer; margin-bottom: 8px">➕ Sell something</summary>
       <div class="row"><input id="sEmoji" placeholder="📦" style="width:60px"><input id="sTitle" placeholder="What is it?"></div>
       <div class="row"><input id="sCond" placeholder="Condition"></div>
-      <div class="row"><input id="sStrategy" placeholder="Your agent's strategy (e.g. firm on price, flexible on pickup)" maxlength="300"></div>
-      <div class="row"><input id="sAsk" type="number" placeholder="Ask $"><input id="sFloor" type="number" placeholder="Secret floor $"></div>
+      <div class="row"><textarea id="sStrategy" rows="2" maxlength="300" placeholder="Your agent's strategy, e.g. firm on price, flexible on pickup"></textarea></div>
+      <div class="row"><input id="sAsk" type="number" placeholder="Asking price ($)"></div>
+      <div class="row"><input id="sFloor" type="number" placeholder="Your secret floor ($)"></div>
       <button id="sellBtn">List it</button>
       <div class="err" id="sellErr"></div>
     </details>
@@ -258,8 +260,9 @@ function renderListings() {
         ${me && l.status !== "sold" && l.sellerId !== me.id ? `<button class="ghost" style="margin-left:auto; font-size:13px; padding:4px 10px" data-toggle="${l.id}">Send my agent</button>` : ""}
       </div>
       <div class="buyform">
-        <div class="row"><input id="ceil-${l.id}" type="number" placeholder="Secret ceiling $"><input id="dl-${l.id}" type="number" placeholder="Deadline (sec)"></div>
-        <div class="row"><input id="pref-${l.id}" placeholder="Your agent's strategy (e.g. patient, hold firm till the end)" maxlength="300"></div>
+        <div class="row"><input id="ceil-${l.id}" type="number" placeholder="Your secret max ($)"></div>
+        <div class="row"><input id="dl-${l.id}" type="number" placeholder="Deadline in sec (optional)"></div>
+        <div class="row"><textarea id="pref-${l.id}" rows="2" maxlength="300" placeholder="Your agent's strategy, e.g. patient, hold firm till the end"></textarea></div>
         <div class="note" style="margin:0 0 8px">Prompt your agent however you like. Your ceiling is enforced in code, so no strategy can make it overpay.</div>
         <button data-go="${l.id}">Go haggle 🎃</button>
         <div class="err" id="err-${l.id}"></div>
@@ -301,8 +304,9 @@ function renderStage() {
     el.querySelector(".name").textContent = name(id)
   }
   const lastBy = (id) => [...o.moves].reverse().find((m) => m.from === id)
-  bubble($("bSeller"), lastBy(o.sellerId))
-  bubble($("bBuyer"), lastBy(o.buyerId))
+  // Once the order closes the banner tells the story; bubbles would sit underneath it.
+  bubble($("bSeller"), o.status === "open" ? lastBy(o.sellerId) : undefined)
+  bubble($("bBuyer"), o.status === "open" ? lastBy(o.buyerId) : undefined)
   const last = o.moves.at(-1)
   if (last && last.moveId !== lastMoveId) {
     lastMoveId = last.moveId
