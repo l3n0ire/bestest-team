@@ -130,6 +130,7 @@
       <div class="err" id="sellErr"></div>
     </details>
     <h2>Listings</h2>
+    <input id="search" type="search" placeholder="🔍 Search: iphone, headphones, dracula…" style="margin-bottom:8px">
     <div class="listings" id="listings"></div>
     <div class="note">Payments are simulated: each person starts with a fake $2,000 escrow balance.</div>
   </section>
@@ -196,6 +197,7 @@ $("joinBtn").onclick = async () => {
   } catch (e) { $("joinErr").textContent = e.message }
 }
 $("name").onkeydown = (e) => e.key === "Enter" && $("joinBtn").click()
+$("search").oninput = () => renderListings()
 
 $("sellBtn").onclick = async () => {
   try {
@@ -244,11 +246,14 @@ function renderMe() {
 function renderListings() {
   const seller = (id) => state.users.find((u) => u.id === id)?.name ?? id
   // Re-rendering replaces the buttons, which swallows clicks in progress, so only redraw on change.
-  const key = JSON.stringify([state.listings, me?.id, openCard, state.users.map((u) => u.name)])
+  // Every word must match the title, condition or seller name.
+  const words = $("search").value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const shown = state.listings.filter((l) => { const hay = `${l.title} ${l.condition} ${seller(l.sellerId)}`.toLowerCase(); return words.every((w) => hay.includes(w)) })
+  const key = JSON.stringify([state.listings, me?.id, openCard, state.users.map((u) => u.name), words])
   if (key === renderListings.key) return
   if (openCard && document.activeElement?.closest?.(".card.open")) return
   renderListings.key = key
-  $("listings").innerHTML = state.listings.map((l) => `
+  $("listings").innerHTML = (shown.length ? "" : `<div class="note">Nothing matches "${esc(words.join(" "))}".</div>`) + shown.map((l) => `
     <div class="card ${openCard === l.id ? "open" : ""}" data-id="${l.id}">
       <div class="top">
         <div class="emoji">${esc(l.emoji)}</div>
